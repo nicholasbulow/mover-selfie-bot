@@ -1,5 +1,6 @@
 """
-Mover Selfie Bot — GitHub Actions runner (Playwright version)
+Mover Selfie Bot — GitHub Actions runner
+Hybrid approach: requests for login, Playwright for JS-rendered pages.
 """
 
 import os
@@ -8,6 +9,9 @@ import json
 import re
 import argparse
 from datetime import date, timedelta
+
+import requests
+from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 BASE      = "https://admin.mover.dk"
@@ -19,58 +23,44 @@ def log(msg: str):
 def format_date(d: date) -> str:
     return d.strftime("%d-%m-%Y")
 
-# ── Login ──────────────────────────────────────────────────────────────────────
+# ── Step 1: Login with requests (proven to work) ───────────────────────────────
 
-def login(page, email: str, password: str):
-    page.goto(LOGIN_URL, wait_until="domcontentloaded")
-    page.wait_for_load_state("networkidle", timeout=20000)
+def requests_login(email: str, password: str) -> list:
+    """Returns a list of cookie dicts for Playwright."""
+    s = requests.Session()
+    s.headers.update({"User-Agent": "Mozilla/5.0"})
 
-    # Use JavaScript to fill and submit — bypasses hidden/duplicate field issues
-    success = page.evaluate("""([email, password]) => {
-        // Find a visible email/username input
-        const allInputs = Array.from(document.querySelectorAll('input'));
-        const emailEl = allInputs.find(el =>
-            (el.name === 'loginEmail' || el.name === 'username' || el.name === 'email' || el.type === 'email')
-            && el.offsetParent !== null
-        );
-        const pwEl = allInputs.find(el =>
-            el.type === 'password' && el.offsetParent !== null
-        );
-        if (!emailEl || !pwEl) return false;
+    # GET login page to obtain CSRF cookie
+    s.get(LOGIN_URL)
+    csrf = s.cookies.get("csrftoken", "")
 
-        // Fill values and fire events so JS frameworks pick them up
-        [emailEl, pwEl].forEach((el, i) => {
-            el.focus();
-            el.value = i === 0 ? email : password;
-            el.dispatchEvent(new Event('input',  {bubbles: true}));
-            el.dispatchEvent(new Event('change', {bubbles: true}));
-        });
+    resp = s.post(LOGIN_URL, data={
+        "csrfmiddlewaretoken": csrf,
+        "username": email,
+        "password": password,
+    }, headers={"Referer": LOGIN_URL, "X-CSRFToken": csrf})
 
-        // Submit the form
-        const form = emailEl.closest('form');
-        if (form) {
-            const btn = form.querySelector('button[type=submit], input[type=submit], button');
-            if (btn) btn.click();
-            else form.submit();
-        }
-        return true;
-    }""", [email, password])
-
-    if not success:
-        raise RuntimeError("Could not find login form fields on the page")
-
-    try:
-        page.wait_for_url(lambda url: "/login" not in url, timeout=20000)
-    except PWTimeout:
+    if "/login" in resp.url:
         raise RuntimeError("Login failed — check MOVER_EMAIL and MOVER_PASSWORD secrets")
 
-    log("✅ Logged in successfully")
+    log(f"✅ Logged in as {email}")
 
-# ── Get driver IDs for a customer on a given date ─────────────────────────────
+    # Convert requests cookies to Playwright cookie format
+    playwright_cookies = []
+    for c in s.cookies:
+        playwright_cookies.append({
+            "name":   c.name,
+            "value":  c.value,
+            "domain": c.domain or "admin.mover.dk",
+            "path":   c.path or "/",
+        })
+    return playwright_cookies
+
+# ── Step 2: Use Playwright with those cookies ──────────────────────────────────
 
 def get_driver_ids(page, customer_id: str, target_date: str) -> tuple:
     trips_url = f"{BASE}/dk/da/user-area/users/{customer_id}/trips/"
-    page.goto(trips_url, wait_until="domcontentloaded")
+    page.goto(trips_url)
     page.wait_for_load_state("networkidle", timeout=20000)
 
     try:
@@ -110,11 +100,9 @@ def get_driver_ids(page, customer_id: str, target_date: str) -> tuple:
                     driver_ids.add(m.group(1))
                     break
         except Exception as e:
-            log(f"  ⚠️  Could not read route page: {e}")
+            log(f"  ⚠️  Route page error: {e}")
 
     return list(driver_ids), len(see_more_links)
-
-# ── Enable selfie for one driver ──────────────────────────────────────────────
 
 def find_selfie_checkbox(page):
     headings = page.query_selector_all("h1,h2,h3,h4,h5,h6,legend")
@@ -169,8 +157,6 @@ def enable_selfie(page, driver_id: str) -> str:
         return "enabled"
     return "save_failed"
 
-# ── Run for one customer ───────────────────────────────────────────────────────
-
 def run_customer(page, customer: dict, date_offset: int):
     target     = date.today() + timedelta(days=date_offset)
     target_str = format_date(target)
@@ -205,8 +191,6 @@ def run_customer(page, customer: dict, date_offset: int):
 
     log(f"  ── ✅ {enabled}  ⏭️  {alreadyon}  ❌ {failed}")
 
-# ── Main ───────────────────────────────────────────────────────────────────────
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--offset", type=int, default=0)
@@ -224,13 +208,19 @@ def main():
 
     active = [c for c in customers if c.get("enabled", True)]
     if not active:
-        log("No active customers in customers.json")
+        log("No active customers configured")
         return
+
+    # Login with requests (proven reliable)
+    cookies = requests_login(email, password)
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page    = browser.new_page()
-        login(page, email, password)
+        context = browser.new_context()
+
+        # Inject login cookies so Playwright is already authenticated
+        context.add_cookies(cookies)
+        page = context.new_page()
 
         for customer in active:
             should_run = customer.get("run_today") if args.offset == 0 else customer.get("run_tomorrow")
