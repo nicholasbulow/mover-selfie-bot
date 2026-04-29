@@ -10,7 +10,7 @@
   {
     "id": "1721631",
     "name": "IKEA BE",
-    "enabled": true,
+    "enabled": false,
     "run_today": true,
     "run_tomorrow": false,
     "run_days": [
