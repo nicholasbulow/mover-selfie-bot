@@ -1,6 +1,5 @@
 """
 Mover Selfie Bot — GitHub Actions runner (Playwright version)
-Uses a real headless browser so JavaScript-rendered pages work correctly.
 """
 
 import os
@@ -26,45 +25,46 @@ def login(page, email: str, password: str):
     page.goto(LOGIN_URL, wait_until="domcontentloaded")
     page.wait_for_load_state("networkidle", timeout=20000)
 
-    # Try every common selector for the email/username field
-    email_selectors = [
-        "input[name='username']",
-        "input[name='email']",
-        "input[type='email']",
-        "input[type='text']",
-    ]
-    email_field = None
-    for sel in email_selectors:
-        el = page.query_selector(sel)
-        if el:
-            email_field = sel
-            log(f"  Found login field: {sel}")
-            break
+    # Use JavaScript to fill and submit — bypasses hidden/duplicate field issues
+    success = page.evaluate("""([email, password]) => {
+        // Find a visible email/username input
+        const allInputs = Array.from(document.querySelectorAll('input'));
+        const emailEl = allInputs.find(el =>
+            (el.name === 'loginEmail' || el.name === 'username' || el.name === 'email' || el.type === 'email')
+            && el.offsetParent !== null
+        );
+        const pwEl = allInputs.find(el =>
+            el.type === 'password' && el.offsetParent !== null
+        );
+        if (!emailEl || !pwEl) return false;
 
-    if not email_field:
-        # Dump all inputs for debugging
-        inputs = page.eval_on_selector_all("input", "els => els.map(e => e.outerHTML)")
-        log(f"  Could not find email field. Inputs on page: {inputs}")
-        raise RuntimeError("Could not find login form fields")
+        // Fill values and fire events so JS frameworks pick them up
+        [emailEl, pwEl].forEach((el, i) => {
+            el.focus();
+            el.value = i === 0 ? email : password;
+            el.dispatchEvent(new Event('input',  {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+        });
 
-    page.fill(email_field, email)
-    page.fill("input[type='password']", password)
+        // Submit the form
+        const form = emailEl.closest('form');
+        if (form) {
+            const btn = form.querySelector('button[type=submit], input[type=submit], button');
+            if (btn) btn.click();
+            else form.submit();
+        }
+        return true;
+    }""", [email, password])
 
-    # Click submit
-    submit = page.query_selector("button[type='submit']") or \
-             page.query_selector("input[type='submit']") or \
-             page.query_selector("button:has-text('Log')")
-    if submit:
-        submit.click()
-    else:
-        page.keyboard.press("Enter")
+    if not success:
+        raise RuntimeError("Could not find login form fields on the page")
 
     try:
         page.wait_for_url(lambda url: "/login" not in url, timeout=20000)
     except PWTimeout:
         raise RuntimeError("Login failed — check MOVER_EMAIL and MOVER_PASSWORD secrets")
 
-    log(f"✅ Logged in successfully")
+    log("✅ Logged in successfully")
 
 # ── Get driver IDs for a customer on a given date ─────────────────────────────
 
@@ -76,7 +76,7 @@ def get_driver_ids(page, customer_id: str, target_date: str) -> tuple:
     try:
         page.wait_for_selector("table tbody tr", timeout=10000)
     except PWTimeout:
-        log("  ⚠️  Trips table not found on page")
+        log("  ⚠️  Trips table not found")
         return [], 0
 
     rows = page.query_selector_all("table tbody tr")
@@ -126,7 +126,7 @@ def find_selfie_checkbox(page):
     if not selfie_heading:
         return None
 
-    cb = page.evaluate("""(heading) => {
+    return page.evaluate("""(heading) => {
         const TAGS = new Set(['H1','H2','H3','H4','H5','H6','LEGEND']);
         function walk(start) {
             let node = start.nextElementSibling;
@@ -142,8 +142,6 @@ def find_selfie_checkbox(page):
         return walk(heading) || (heading.parentElement && walk(heading.parentElement));
     }""", selfie_heading)
 
-    return cb
-
 def enable_selfie(page, driver_id: str) -> str:
     url = f"{BASE}/dk/da/user-area/users/{driver_id}/settings/"
     page.goto(url, wait_until="networkidle")
@@ -158,11 +156,9 @@ def enable_selfie(page, driver_id: str) -> str:
 
     page.evaluate("el => el.click()", cb)
 
-    # Click Save
     save = page.query_selector("input[value='Save'], button:has-text('Save'), button[type='submit']")
     if not save:
         return "save button not found"
-
     save.click()
     page.wait_for_load_state("networkidle")
 
