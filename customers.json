@@ -29,5 +29,10 @@
     "id": "1268226",
     "name": "IKEA NL Co-pilot",
     "enabled": true
+  },
+  {
+    "id": "1778321",
+    "name": "IKEA BE Co-pilot",
+    "enabled": true
   }
 ]
