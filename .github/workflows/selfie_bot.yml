@@ -27,7 +27,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install playwright
+          pip install requests beautifulsoup4 playwright
           playwright install chromium --with-deps
 
       - name: Run selfie bot (today)
