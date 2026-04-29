@@ -6,5 +6,13 @@
     "run_today": false,
     "run_tomorrow": false,
     "run_days": []
+  },
+  {
+    "id": "1721631",
+    "name": "IKEA BE",
+    "enabled": true,
+    "run_today": false,
+    "run_tomorrow": false,
+    "run_days": []
   }
 ]
