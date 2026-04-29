@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Selfie Bot — Mover Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222535;
+    --border: #2e3148;
+    --text: #e8eaf0;
+    --text-muted: #6b7090;
+    --blue: #4f8ef7;
+    --blue-dim: #1e2d4a;
+    --green: #3ecf8e;
+    --green-dim: #0f2e21;
+    --red: #f05555;
+    --red-dim: #2e1515;
+    --yellow: #f5c542;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+  }
+
+  /* ── Layout ── */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.3px;
+  }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--blue);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+  .status-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+
+  .main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  /* ── Auth screen ── */
+  .auth-screen {
+    max-width: 440px;
+    margin: 80px auto;
+    text-align: center;
+  }
+
+  .auth-icon {
+    width: 64px; height: 64px;
+    background: var(--blue-dim);
+    border: 1px solid var(--blue);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    margin: 0 auto 24px;
+  }
+
+  .auth-screen h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .auth-screen p  { color: var(--text-muted); line-height: 1.6; margin-bottom: 24px; }
+
+  .auth-form { text-align: left; }
+  .auth-form label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .auth-form input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    padding: 10px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    margin-bottom: 12px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .auth-form input:focus { border-color: var(--blue); }
+
+  .help-link { font-size: 12px; color: var(--blue); margin-bottom: 20px; display: block; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    border: none;
+    border-radius: var(--radius);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .15s, transform .1s;
+  }
+  .btn:hover   { opacity: .88; }
+  .btn:active  { transform: scale(.97); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  .btn-primary  { background: var(--blue); color: #fff; }
+  .btn-green    { background: var(--green); color: #0a1a12; }
+  .btn-ghost    { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-danger   { background: var(--red-dim); color: var(--red); border: 1px solid #3d1515; }
+  .btn-full     { width: 100%; justify-content: center; }
+  .btn-sm       { padding: 6px 12px; font-size: 12px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .card-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .card-title {
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-body { padding: 20px; }
+
+  /* ── Grid ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  @media (max-width: 600px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .grid-3 { grid-template-columns: 1fr; }
+  }
+
+  /* ── Stat cards ── */
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+  }
+  .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .stat-value { font-size: 26px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .stat-value.blue   { color: var(--blue); }
+  .stat-value.green  { color: var(--green); }
+  .stat-value.yellow { color: var(--yellow); }
+
+  /* ── Customer rows ── */
+  .customer-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    transition: background .15s;
+  }
+  .customer-row:last-child { border-bottom: none; }
+  .customer-row:hover { background: var(--surface2); }
+
+  .customer-name { font-weight: 600; flex: 1; }
+  .customer-id   { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-muted); }
+
+  .tags { display: flex; gap: 5px; flex-wrap: wrap; }
+  .tag {
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .tag-blue   { background: var(--blue-dim); color: var(--blue); }
+  .tag-green  { background: var(--green-dim); color: var(--green); }
+  .tag-muted  { background: var(--surface2); color: var(--text-muted); }
+  .tag-red    { background: var(--red-dim); color: var(--red); }
+
+  /* ── Toggle ── */
+  .toggle { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute; inset: 0;
+    background: var(--border);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .toggle-track::before {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    left: 3px; top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .2s;
+  }
+  .toggle input:checked + .toggle-track { background: var(--blue); }
+  .toggle input:checked + .toggle-track::before { transform: translateX(16px); }
+
+  /* ── Form elements ── */
+  .form-group { margin-bottom: 16px; }
+  .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .4px; }
+  .form-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 9px 13px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .form-input:focus { border-color: var(--blue); }
+
+  .day-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .day-pill input { display: none; }
+  .day-pill span {
+    display: inline-block;
+    padding: 4px 11px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all .15s;
+  }
+  .day-pill input:checked + span {
+    background: var(--blue-dim);
+    color: var(--blue);
+    border-color: var(--blue);
+  }
+
+  .checkrow { display: flex; gap: 20px; margin-bottom: 16px; }
+  .check-label { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 13px; }
+  .check-label input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--blue); }
+
+  /* ── Run bar ── */
+  .run-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  /* ── Log ── */
+  .log-box {
+    background: #0a0c12;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    line-height: 1.9;
+    color: #a0a8c0;
+    max-height: 280px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    display: none;
+  }
+
+  /* ── Workflow runs ── */
+  .run-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .run-item:last-child { border-bottom: none; }
+  .run-status {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .run-status.success    { background: var(--green); }
+  .run-status.failure    { background: var(--red); }
+  .run-status.in_progress { background: var(--yellow); animation: pulse 1s infinite; }
+  .run-status.queued     { background: var(--text-muted); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+  }
+
+  .run-name { flex: 1; }
+  .run-time { font-size: 11px; color: var(--text-muted); font-family: 'DM Mono', monospace; }
+
+  /* ── Section header ── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-title { font-weight: 700; font-size: 16px; }
+
+  /* ── Empty state ── */
+  .empty {
+    text-align: center;
+    padding: 32px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .empty .empty-icon { font-size: 32px; margin-bottom: 8px; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    display: none;
+  }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 20px; }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 300;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all .3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  #app { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">📸</div>
+    Selfie Bot
+  </div>
+  <div class="topbar-right">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text" style="font-size:12px;color:var(--text-muted)">Not connected</span>
+    <button class="btn btn-ghost btn-sm" id="btn-logout" style="display:none">Log out</button>
+  </div>
+</div>
+
+<!-- Auth screen -->
+<div id="auth-screen">
+  <div class="auth-screen">
+    <div class="auth-icon">🔑</div>
+    <h2>Connect to GitHub</h2>
+    <p>This dashboard reads and updates your selfie bot config directly from your GitHub repo. You need a Personal Access Token with repo access.</p>
+    <a class="help-link" href="https://github.com/settings/tokens/new?scopes=repo&description=SelfieBot" target="_blank">
+      → Create a token on GitHub (takes 30 seconds)
+    </a>
+    <div class="auth-form">
+      <label>GitHub Personal Access Token</label>
+      <input type="password" id="inp-token" placeholder="ghp_xxxxxxxxxxxx">
+      <label>GitHub Username</label>
+      <input type="text" id="inp-owner" placeholder="your-github-username">
+      <label>Repository Name</label>
+      <input type="text" id="inp-repo" placeholder="mover-selfie-bot">
+      <button class="btn btn-primary btn-full" id="btn-connect">Connect</button>
+    </div>
+    <p style="margin-top:16px;font-size:11px;color:var(--text-muted)">
+      Your token is stored only in your browser and never sent anywhere except GitHub's API.
+    </p>
+  </div>
+</div>
+
+<!-- Main app -->
+<div id="app">
+  <div class="main">
+
+    <!-- Stats row -->
+    <div class="grid-3" style="margin-bottom:24px" id="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Active Customers</div>
+        <div class="stat-value blue" id="stat-customers">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Last Run</div>
+        <div class="stat-value green" id="stat-last-run" style="font-size:15px;padding-top:6px">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Next Scheduled</div>
+        <div class="stat-value yellow" id="stat-next" style="font-size:15px;padding-top:6px">—</div>
+      </div>
+    </div>
+
+    <!-- Run now -->
+    <div class="section-header">
+      <div class="section-title">Run Now</div>
+    </div>
+    <div class="run-bar">
+      <button class="btn btn-primary" id="btn-run-today">▶ Run all — Today</button>
+      <button class="btn btn-green"   id="btn-run-tomorrow">▶ Run all — Tomorrow</button>
+      <button class="btn btn-ghost" id="btn-refresh-runs" style="margin-left:auto">↻ Refresh</button>
+    </div>
+
+    <!-- Log -->
+    <div class="log-box" id="log-box"></div>
+
+    <!-- Customers -->
+    <div class="section-header" style="margin-top:24px">
+      <div class="section-title">Customers</div>
+      <button class="btn btn-ghost btn-sm" id="btn-add-customer">+ Add customer</button>
+    </div>
+    <div class="card" id="customer-list">
+      <div class="empty"><div class="empty-icon">🏢</div>No customers configured yet.</div>
+    </div>
+
+    <!-- Recent runs -->
+    <div class="section-header" style="margin-top:24px">
+      <div class="section-title">Recent Runs</div>
+    </div>
+    <div class="card" id="runs-list">
+      <div class="empty"><div class="empty-icon">⏱</div>No runs yet.</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Add Customer Modal -->
+<div class="modal-overlay" id="modal-add">
+  <div class="modal">
+    <h3>Add Customer</h3>
+    <div class="grid-2">
+      <div class="form-group">
+        <label class="form-label">Customer Name</label>
+        <input class="form-input" id="m-name" placeholder="e.g. IKEA NL">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Customer ID</label>
+        <input class="form-input" id="m-id" placeholder="e.g. 880715">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Enable selfies for</label>
+      <div class="checkrow">
+        <label class="check-label"><input type="checkbox" id="m-today" checked> Today</label>
+        <label class="check-label"><input type="checkbox" id="m-tomorrow" checked> Tomorrow</label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Run on these days</label>
+      <div class="day-pills" id="m-days">
+        <label class="day-pill"><input type="checkbox" value="1" checked><span>Mon</span></label>
+        <label class="day-pill"><input type="checkbox" value="2" checked><span>Tue</span></label>
+        <label class="day-pill"><input type="checkbox" value="3" checked><span>Wed</span></label>
+        <label class="day-pill"><input type="checkbox" value="4" checked><span>Thu</span></label>
+        <label class="day-pill"><input type="checkbox" value="5" checked><span>Fri</span></label>
+        <label class="day-pill"><input type="checkbox" value="6"><span>Sat</span></label>
+        <label class="day-pill"><input type="checkbox" value="0"><span>Sun</span></label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btn-modal-cancel">Cancel</button>
+      <button class="btn btn-primary" id="btn-modal-save">Add Customer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+let CONFIG = { token: '', owner: '', repo: '' };
+let customers = [];
+
+// ── Storage ────────────────────────────────────────────────────────────────────
+function saveConfig() { localStorage.setItem('selfiebot_config', JSON.stringify(CONFIG)); }
+function loadConfig() {
+  const s = localStorage.getItem('selfiebot_config');
+  if (s) CONFIG = JSON.parse(s);
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function toast(msg, icon = '✓') {
+  const el = document.getElementById('toast');
+  el.innerHTML = `<span>${icon}</span> ${msg}`;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── GitHub API ─────────────────────────────────────────────────────────────────
+async function ghFetch(path, opts = {}) {
+  const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}${path}`, {
+    ...opts,
+    headers: {
+      'Authorization': `token ${CONFIG.token}`,
+      'Accept': 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+      ...(opts.headers || {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `GitHub API error ${res.status}`);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+async function testConnection() {
+  await ghFetch('/contents/customers.json');
+  return true;
+}
+
+// ── customers.json ─────────────────────────────────────────────────────────────
+async function loadCustomers() {
+  const data = await ghFetch('/contents/customers.json');
+  customers = JSON.parse(atob(data.content.replace(/\n/g, '')));
+  return data.sha;
+}
+
+async function saveCustomers(sha) {
+  await ghFetch('/contents/customers.json', {
+    method: 'PUT',
+    body: JSON.stringify({
+      message: 'Update customers.json via Selfie Bot dashboard',
+      content: btoa(JSON.stringify(customers, null, 2)),
+      sha,
+    }),
+  });
+}
+
+// ── Workflow dispatch ──────────────────────────────────────────────────────────
+async function triggerRun(offset) {
+  await ghFetch('/actions/workflows/selfie_bot.yml/dispatches', {
+    method: 'POST',
+    body: JSON.stringify({
+      ref: 'main',
+      inputs: { offset: String(offset) },
+    }),
+  });
+}
+
+async function loadRuns() {
+  const data = await ghFetch('/actions/runs?per_page=8');
+  return data.workflow_runs || [];
+}
+
+// ── Render customers ───────────────────────────────────────────────────────────
+async function renderCustomers() {
+  const el = document.getElementById('customer-list');
+  if (!customers.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🏢</div>No customers yet. Click "+ Add customer" to get started.</div>';
+    document.getElementById('stat-customers').textContent = '0';
+    return;
+  }
+
+  const active = customers.filter(c => c.enabled !== false).length;
+  document.getElementById('stat-customers').textContent = active;
+
+  el.innerHTML = '';
+  customers.forEach((c, i) => {
+    const days = !c.run_days || c.run_days.length === 7
+      ? 'Every day'
+      : c.run_days.map(d => DAY_NAMES[d]).join(', ');
+
+    const row = document.createElement('div');
+    row.className = 'customer-row';
+    row.innerHTML = `
+      <label class="toggle">
+        <input type="checkbox" ${c.enabled !== false ? 'checked' : ''} data-idx="${i}">
+        <div class="toggle-track"></div>
+      </label>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="customer-name">${c.name}</span>
+          <span class="customer-id">ID: ${c.id}</span>
+        </div>
+        <div class="tags" style="margin-top:5px">
+          ${c.run_today    ? '<span class="tag tag-blue">Today</span>'    : ''}
+          ${c.run_tomorrow ? '<span class="tag tag-green">Tomorrow</span>': ''}
+          <span class="tag tag-muted">${days}</span>
+        </div>
+      </div>
+      <button class="btn btn-danger btn-sm" data-del="${i}">Remove</button>
+    `;
+
+    row.querySelector('input[type=checkbox]').addEventListener('change', async e => {
+      customers[i].enabled = e.target.checked;
+      await persistCustomers();
+    });
+
+    row.querySelector('[data-del]').addEventListener('click', async () => {
+      if (!confirm(`Remove ${c.name}?`)) return;
+      customers.splice(i, 1);
+      await persistCustomers();
+    });
+
+    el.appendChild(row);
+  });
+}
+
+async function persistCustomers() {
+  try {
+    const sha = await loadCustomers().then(() => ghFetch('/contents/customers.json').then(d => d.sha));
+    // Re-fetch sha to avoid conflicts
+    const fresh = await ghFetch('/contents/customers.json');
+    await ghFetch('/contents/customers.json', {
+      method: 'PUT',
+      body: JSON.stringify({
+        message: 'Update customers.json via Selfie Bot dashboard',
+        content: btoa(JSON.stringify(customers, null, 2)),
+        sha: fresh.sha,
+      }),
+    });
+    toast('Saved to GitHub');
+    renderCustomers();
+  } catch (e) {
+    toast('Save failed: ' + e.message, '❌');
+  }
+}
+
+// ── Render runs ────────────────────────────────────────────────────────────────
+async function renderRuns() {
+  const el = document.getElementById('runs-list');
+  try {
+    const runs = await loadRuns();
+    if (!runs.length) {
+      el.innerHTML = '<div class="empty"><div class="empty-icon">⏱</div>No runs yet.</div>';
+      return;
+    }
+
+    // Update last run stat
+    const last = runs.find(r => r.conclusion);
+    if (last) {
+      const d = new Date(last.updated_at);
+      document.getElementById('stat-last-run').textContent =
+        d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }) + ' ' +
+        d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    el.innerHTML = '';
+    runs.slice(0, 6).forEach(run => {
+      const status = run.status === 'completed' ? run.conclusion : run.status;
+      const statusMap = { success: 'success', failure: 'failure', in_progress: 'in_progress', queued: 'queued' };
+      const labelMap  = { success: 'Success', failure: 'Failed', in_progress: 'Running...', queued: 'Queued' };
+      const d = new Date(run.created_at);
+      const timeStr = d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }) + ' ' +
+                      d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const row = document.createElement('div');
+      row.className = 'run-item';
+      row.innerHTML = `
+        <div class="run-status ${statusMap[status] || 'queued'}"></div>
+        <div class="run-name">
+          ${run.display_title || run.name}
+          <span class="tag tag-muted" style="margin-left:6px">${labelMap[status] || status}</span>
+        </div>
+        <div class="run-time">${timeStr}</div>
+        <a href="${run.html_url}" target="_blank" class="btn btn-ghost btn-sm">View ↗</a>
+      `;
+      el.appendChild(row);
+    });
+  } catch (e) {
+    el.innerHTML = `<div class="empty">Could not load runs: ${e.message}</div>`;
+  }
+}
+
+// ── Connect ────────────────────────────────────────────────────────────────────
+document.getElementById('btn-connect').addEventListener('click', async () => {
+  const token = document.getElementById('inp-token').value.trim();
+  const owner = document.getElementById('inp-owner').value.trim();
+  const repo  = document.getElementById('inp-repo').value.trim();
+  if (!token || !owner || !repo) { toast('Fill in all fields', '⚠️'); return; }
+
+  CONFIG = { token, owner, repo };
+  const btn = document.getElementById('btn-connect');
+  btn.disabled = true; btn.textContent = 'Connecting...';
+
+  try {
+    await testConnection();
+    saveConfig();
+    showApp();
+  } catch (e) {
+    toast('Connection failed: ' + e.message, '❌');
+    btn.disabled = false; btn.textContent = 'Connect';
+  }
+});
+
+function showApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('btn-logout').style.display = 'inline-flex';
+  const dot = document.getElementById('status-dot');
+  dot.classList.add('connected');
+  document.getElementById('status-text').textContent = `${CONFIG.owner}/${CONFIG.repo}`;
+
+  // Next scheduled — simplified
+  document.getElementById('stat-next').textContent = 'Weekdays 07:00';
+
+  loadCustomers().then(() => renderCustomers());
+  renderRuns();
+}
+
+document.getElementById('btn-logout').addEventListener('click', () => {
+  localStorage.removeItem('selfiebot_config');
+  location.reload();
+});
+
+// ── Run buttons ────────────────────────────────────────────────────────────────
+async function runNow(offset) {
+  const label = offset === 0 ? 'today' : 'tomorrow';
+  const log = document.getElementById('log-box');
+  log.style.display = 'block';
+  log.textContent = `Triggering run for ${label}...\n`;
+
+  try {
+    await triggerRun(offset);
+    log.textContent += `✅ Workflow triggered! Check "Recent Runs" for progress.\n`;
+    log.textContent += `(GitHub takes ~30 seconds to start the run)\n`;
+    toast('Run triggered!');
+    setTimeout(renderRuns, 5000);
+  } catch (e) {
+    log.textContent += `❌ Error: ${e.message}\n`;
+    toast('Failed: ' + e.message, '❌');
+  }
+}
+
+document.getElementById('btn-run-today').addEventListener('click',    () => runNow(0));
+document.getElementById('btn-run-tomorrow').addEventListener('click', () => runNow(1));
+document.getElementById('btn-refresh-runs').addEventListener('click', renderRuns);
+
+// ── Add customer modal ─────────────────────────────────────────────────────────
+document.getElementById('btn-add-customer').addEventListener('click', () => {
+  document.getElementById('modal-add').style.display = 'flex';
+});
+document.getElementById('btn-modal-cancel').addEventListener('click', () => {
+  document.getElementById('modal-add').style.display = 'none';
+});
+document.getElementById('modal-add').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-add'))
+    document.getElementById('modal-add').style.display = 'none';
+});
+
+document.getElementById('btn-modal-save').addEventListener('click', async () => {
+  const name = document.getElementById('m-name').value.trim();
+  const id   = document.getElementById('m-id').value.trim();
+  if (!name || !id) { toast('Name and ID are required', '⚠️'); return; }
+  if (customers.find(c => c.id === id)) { toast('Customer ID already exists', '⚠️'); return; }
+
+  const runDays = [...document.querySelectorAll('#m-days input:checked')].map(el => Number(el.value));
+
+  customers.push({
+    id, name,
+    enabled: true,
+    run_today:    document.getElementById('m-today').checked,
+    run_tomorrow: document.getElementById('m-tomorrow').checked,
+    run_days:     runDays,
+  });
+
+  document.getElementById('modal-add').style.display = 'none';
+  await persistCustomers();
+  toast('Customer added!');
+
+  // Reset form
+  document.getElementById('m-name').value = '';
+  document.getElementById('m-id').value   = '';
+});
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+loadConfig();
+if (CONFIG.token && CONFIG.owner && CONFIG.repo) {
+  showApp();
+} else {
+  document.getElementById('auth-screen').style.display = 'block';
+}
+</script>
+</body>
+</html>
