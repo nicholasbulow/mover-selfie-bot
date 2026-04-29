@@ -3,14 +3,8 @@
     "id": "880715",
     "name": "IKEA NL",
     "enabled": true,
-    "run_today": true,
-    "run_tomorrow": true,
-    "run_days": [
-      1,
-      2,
-      3,
-      4,
-      5
-    ]
+    "run_today": false,
+    "run_tomorrow": false,
+    "run_days": []
   }
 ]
