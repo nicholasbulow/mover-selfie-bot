@@ -1,9 +1,6 @@
 name: Mover Selfie Bot
 
 on:
-  schedule:
-    - cron: "0 6 * * 1-5"
-    - cron: "0 15 * * 4"
   workflow_dispatch:
     inputs:
       offset:
@@ -12,6 +9,10 @@ on:
         default: "0"
         type: choice
         options: ["0", "1"]
+      customer_id:
+        description: "Specific customer ID (leave empty to run all)"
+        required: false
+        default: ""
 
 jobs:
   run-selfie-bot:
@@ -28,23 +29,9 @@ jobs:
       - name: Install dependencies
         run: pip install requests beautifulsoup4
 
-      - name: Run selfie bot (today)
-        if: github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1-5'
+      - name: Run selfie bot
         env:
-          MOVER_EMAIL:    ${{ secrets.MOVER_EMAIL }}
-          MOVER_PASSWORD: ${{ secrets.MOVER_PASSWORD }}
-        run: python selfie_bot.py --offset 0
-
-      - name: Run selfie bot (tomorrow)
-        if: github.event_name == 'schedule' && github.event.schedule == '0 15 * * 4'
-        env:
-          MOVER_EMAIL:    ${{ secrets.MOVER_EMAIL }}
-          MOVER_PASSWORD: ${{ secrets.MOVER_PASSWORD }}
-        run: python selfie_bot.py --offset 1
-
-      - name: Run selfie bot (manual)
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          MOVER_EMAIL:    ${{ secrets.MOVER_EMAIL }}
-          MOVER_PASSWORD: ${{ secrets.MOVER_PASSWORD }}
+          MOVER_EMAIL:       ${{ secrets.MOVER_EMAIL }}
+          MOVER_PASSWORD:    ${{ secrets.MOVER_PASSWORD }}
+          CUSTOMER_ID:       ${{ github.event.inputs.customer_id }}
         run: python selfie_bot.py --offset ${{ github.event.inputs.offset }}
