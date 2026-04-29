@@ -6,6 +6,7 @@ Uses a real headless browser so JavaScript-rendered pages work correctly.
 import os
 import sys
 import json
+import re
 import argparse
 from datetime import date, timedelta
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
@@ -13,34 +14,69 @@ from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 BASE      = "https://admin.mover.dk"
 LOGIN_URL = f"{BASE}/dk/da/login/"
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+def log(msg: str):
+    print(msg, flush=True)
 
 def format_date(d: date) -> str:
     return d.strftime("%d-%m-%Y")
 
-def log(msg: str):
-    print(msg, flush=True)
-
 # ── Login ──────────────────────────────────────────────────────────────────────
 
 def login(page, email: str, password: str):
-    page.goto(LOGIN_URL, wait_until="networkidle")
-    page.fill("input[name='username']", email)
-    page.fill("input[name='password']", password)
-    page.click("button[type='submit'], input[type='submit']")
-    page.wait_for_url(lambda url: "/login" not in url, timeout=15000)
-    log(f"✅ Logged in as {email}")
+    page.goto(LOGIN_URL, wait_until="domcontentloaded")
+    page.wait_for_load_state("networkidle", timeout=20000)
+
+    # Try every common selector for the email/username field
+    email_selectors = [
+        "input[name='username']",
+        "input[name='email']",
+        "input[type='email']",
+        "input[type='text']",
+    ]
+    email_field = None
+    for sel in email_selectors:
+        el = page.query_selector(sel)
+        if el:
+            email_field = sel
+            log(f"  Found login field: {sel}")
+            break
+
+    if not email_field:
+        # Dump all inputs for debugging
+        inputs = page.eval_on_selector_all("input", "els => els.map(e => e.outerHTML)")
+        log(f"  Could not find email field. Inputs on page: {inputs}")
+        raise RuntimeError("Could not find login form fields")
+
+    page.fill(email_field, email)
+    page.fill("input[type='password']", password)
+
+    # Click submit
+    submit = page.query_selector("button[type='submit']") or \
+             page.query_selector("input[type='submit']") or \
+             page.query_selector("button:has-text('Log')")
+    if submit:
+        submit.click()
+    else:
+        page.keyboard.press("Enter")
+
+    try:
+        page.wait_for_url(lambda url: "/login" not in url, timeout=20000)
+    except PWTimeout:
+        raise RuntimeError("Login failed — check MOVER_EMAIL and MOVER_PASSWORD secrets")
+
+    log(f"✅ Logged in successfully")
 
 # ── Get driver IDs for a customer on a given date ─────────────────────────────
 
 def get_driver_ids(page, customer_id: str, target_date: str) -> tuple:
     trips_url = f"{BASE}/dk/da/user-area/users/{customer_id}/trips/"
-    page.goto(trips_url, wait_until="networkidle")
+    page.goto(trips_url, wait_until="domcontentloaded")
+    page.wait_for_load_state("networkidle", timeout=20000)
 
-    # Wait for table to appear
     try:
         page.wait_for_selector("table tbody tr", timeout=10000)
     except PWTimeout:
+        log("  ⚠️  Trips table not found on page")
         return [], 0
 
     rows = page.query_selector_all("table tbody tr")
@@ -61,13 +97,14 @@ def get_driver_ids(page, customer_id: str, target_date: str) -> tuple:
                 if full not in see_more_links:
                     see_more_links.append(full)
 
+    log(f"  Found {len(see_more_links)} trip(s) for {target_date}")
+
     driver_ids = set()
     for url in see_more_links:
         try:
             page.goto(url, wait_until="networkidle")
-            for a in page.query_selector_all("a[href*='/user-area/users/']"):
+            for a in page.query_selector_all("a"):
                 href = a.get_attribute("href") or ""
-                import re
                 m = re.search(r"/users/(\d+)", href)
                 if m and m.group(1) != customer_id:
                     driver_ids.add(m.group(1))
@@ -80,8 +117,7 @@ def get_driver_ids(page, customer_id: str, target_date: str) -> tuple:
 # ── Enable selfie for one driver ──────────────────────────────────────────────
 
 def find_selfie_checkbox(page):
-    """Find the selfie checkbox by locating the heading then the next checkbox."""
-    headings = page.query_selector_all("h1, h2, h3, h4, h5, h6, legend")
+    headings = page.query_selector_all("h1,h2,h3,h4,h5,h6,legend")
     selfie_heading = None
     for h in headings:
         if "selfie" in h.inner_text().lower():
@@ -90,13 +126,12 @@ def find_selfie_checkbox(page):
     if not selfie_heading:
         return None
 
-    # Evaluate in page context to walk forward siblings
     cb = page.evaluate("""(heading) => {
-        const HEADING_TAGS = new Set(['H1','H2','H3','H4','H5','H6','LEGEND']);
-        function walkForward(start) {
+        const TAGS = new Set(['H1','H2','H3','H4','H5','H6','LEGEND']);
+        function walk(start) {
             let node = start.nextElementSibling;
             while (node) {
-                if (HEADING_TAGS.has(node.tagName)) break;
+                if (TAGS.has(node.tagName)) break;
                 if (node.tagName === 'INPUT' && node.type === 'checkbox') return node;
                 const inner = node.querySelector('input[type="checkbox"]');
                 if (inner) return inner;
@@ -104,7 +139,7 @@ def find_selfie_checkbox(page):
             }
             return null;
         }
-        return walkForward(heading) || (heading.parentElement && walkForward(heading.parentElement));
+        return walk(heading) || (heading.parentElement && walk(heading.parentElement));
     }""", selfie_heading)
 
     return cb
@@ -113,48 +148,41 @@ def enable_selfie(page, driver_id: str) -> str:
     url = f"{BASE}/dk/da/user-area/users/{driver_id}/settings/"
     page.goto(url, wait_until="networkidle")
 
-    cb_handle = find_selfie_checkbox(page)
-    if cb_handle is None:
+    cb = find_selfie_checkbox(page)
+    if cb is None:
         return "selfie checkbox not found"
 
-    # Check if already enabled
-    is_checked = page.evaluate("el => el.checked", cb_handle)
+    is_checked = page.evaluate("el => el.checked", cb)
     if is_checked:
         return "already_on"
 
-    # Click the checkbox
-    page.evaluate("el => el.click()", cb_handle)
+    page.evaluate("el => el.click()", cb)
 
-    # Click Save button
-    try:
-        save_btn = page.query_selector("button[type='submit'], input[type='submit'], button:has-text('Save'), input[value='Save']")
-        if save_btn:
-            save_btn.click()
-            page.wait_for_load_state("networkidle")
-        else:
-            return "save button not found"
-    except Exception as e:
-        return f"save error: {e}"
+    # Click Save
+    save = page.query_selector("input[value='Save'], button:has-text('Save'), button[type='submit']")
+    if not save:
+        return "save button not found"
+
+    save.click()
+    page.wait_for_load_state("networkidle")
 
     # Verify
     page.goto(url, wait_until="networkidle")
-    cb_verify = find_selfie_checkbox(page)
-    if cb_verify and page.evaluate("el => el.checked", cb_verify):
+    cb2 = find_selfie_checkbox(page)
+    if cb2 and page.evaluate("el => el.checked", cb2):
         return "enabled"
     return "save_failed"
 
 # ── Run for one customer ───────────────────────────────────────────────────────
 
 def run_customer(page, customer: dict, date_offset: int):
-    import re
     target     = date.today() + timedelta(days=date_offset)
     target_str = format_date(target)
     label      = "today" if date_offset == 0 else "tomorrow"
 
     log(f"\n── {customer['name']} ({customer['id']}) — {target_str} ({label})")
 
-    # Day-of-week check (0=Sun, 1=Mon ... 6=Sat)
-    dow = target.isoweekday() % 7
+    dow      = target.isoweekday() % 7
     run_days = customer.get("run_days", list(range(7)))
     if run_days and dow not in run_days:
         day_names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
@@ -170,7 +198,7 @@ def run_customer(page, customer: dict, date_offset: int):
         log(f"  ⚠️  No driver IDs found ({trip_count} trips)")
         return
 
-    log(f"  Found {len(driver_ids)} driver(s) across {trip_count} trip(s)")
+    log(f"  Found {len(driver_ids)} unique driver(s)")
 
     enabled = alreadyon = failed = 0
     for did in sorted(driver_ids):
@@ -206,7 +234,6 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page    = browser.new_page()
-
         login(page, email, password)
 
         for customer in active:
