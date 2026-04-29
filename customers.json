@@ -24,5 +24,10 @@
     "run_today": false,
     "run_tomorrow": false,
     "run_days": []
+  },
+  {
+    "id": "1268226",
+    "name": "IKEA NL Co-pilot",
+    "enabled": true
   }
 ]
