@@ -498,18 +498,18 @@
   </div>
 </div>
 
-<!-- Add Customer Modal -->
+<!-- Add / Edit Customer Modal -->
 <div class="modal-overlay" id="modal-add">
   <div class="modal">
-    <h3>Add Customer</h3>
+    <h3 id="modal-title">Add Customer</h3>
     <div class="grid-2">
-      <div class="form-group">
-        <label class="form-label">Customer Name</label>
-        <input class="form-input" id="m-name" placeholder="e.g. IKEA NL">
-      </div>
       <div class="form-group">
         <label class="form-label">Customer ID</label>
         <input class="form-input" id="m-id" placeholder="e.g. 880715">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Label (optional)</label>
+        <input class="form-input" id="m-name" placeholder="e.g. IKEA NL">
       </div>
     </div>
     <div class="form-group">
@@ -654,13 +654,18 @@ async function renderCustomers() {
           <span class="tag tag-muted">${days}</span>
         </div>
       </div>
-      <button class="btn btn-danger btn-sm" data-del="${i}">Remove</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" data-edit="${i}">Edit</button>
+        <button class="btn btn-danger btn-sm" data-del="${i}">Remove</button>
+      </div>
     `;
 
     row.querySelector('input[type=checkbox]').addEventListener('change', async e => {
       customers[i].enabled = e.target.checked;
       await persistCustomers();
     });
+
+    row.querySelector('[data-edit]').addEventListener('click', () => openEditModal(i));
 
     row.querySelector('[data-del]').addEventListener('click', async () => {
       if (!confirm(`Remove ${c.name}?`)) return;
@@ -801,10 +806,40 @@ document.getElementById('btn-run-today').addEventListener('click',    () => runN
 document.getElementById('btn-run-tomorrow').addEventListener('click', () => runNow(1));
 document.getElementById('btn-refresh-runs').addEventListener('click', renderRuns);
 
-// ── Add customer modal ─────────────────────────────────────────────────────────
-document.getElementById('btn-add-customer').addEventListener('click', () => {
+
+// ── Add / Edit customer modal ──────────────────────────────────────────────────
+let editIndex = -1; // -1 = adding, >=0 = editing
+
+function openAddModal() {
+  editIndex = -1;
+  document.getElementById('modal-title').textContent = 'Add Customer';
+  document.getElementById('btn-modal-save').textContent = 'Add Customer';
+  document.getElementById('m-id').value   = '';
+  document.getElementById('m-name').value = '';
+  document.getElementById('m-today').checked    = true;
+  document.getElementById('m-tomorrow').checked = true;
+  document.querySelectorAll('#m-days input').forEach(el => {
+    el.checked = ['1','2','3','4','5'].includes(el.value);
+  });
   document.getElementById('modal-add').style.display = 'flex';
-});
+}
+
+function openEditModal(i) {
+  editIndex = i;
+  const c = customers[i];
+  document.getElementById('modal-title').textContent = 'Edit Customer';
+  document.getElementById('btn-modal-save').textContent = 'Save Changes';
+  document.getElementById('m-id').value   = c.id;
+  document.getElementById('m-name').value = c.name || '';
+  document.getElementById('m-today').checked    = !!c.run_today;
+  document.getElementById('m-tomorrow').checked = !!c.run_tomorrow;
+  document.querySelectorAll('#m-days input').forEach(el => {
+    el.checked = (c.run_days || [1,2,3,4,5]).includes(Number(el.value));
+  });
+  document.getElementById('modal-add').style.display = 'flex';
+}
+
+document.getElementById('btn-add-customer').addEventListener('click', openAddModal);
 document.getElementById('btn-modal-cancel').addEventListener('click', () => {
   document.getElementById('modal-add').style.display = 'none';
 });
@@ -814,28 +849,29 @@ document.getElementById('modal-add').addEventListener('click', e => {
 });
 
 document.getElementById('btn-modal-save').addEventListener('click', async () => {
-  const name = document.getElementById('m-name').value.trim();
   const id   = document.getElementById('m-id').value.trim();
-  if (!name || !id) { toast('Name and ID are required', '⚠️'); return; }
-  if (customers.find(c => c.id === id)) { toast('Customer ID already exists', '⚠️'); return; }
+  const name = document.getElementById('m-name').value.trim() || id;
+  if (!id) { toast('Customer ID is required', '⚠️'); return; }
 
   const runDays = [...document.querySelectorAll('#m-days input:checked')].map(el => Number(el.value));
-
-  customers.push({
+  const customer = {
     id, name,
-    enabled: true,
+    enabled:      editIndex >= 0 ? (customers[editIndex].enabled !== false) : true,
     run_today:    document.getElementById('m-today').checked,
     run_tomorrow: document.getElementById('m-tomorrow').checked,
     run_days:     runDays,
-  });
+  };
+
+  if (editIndex >= 0) {
+    customers[editIndex] = customer;
+  } else {
+    if (customers.find(c => c.id === id)) { toast('Customer ID already exists', '⚠️'); return; }
+    customers.push(customer);
+  }
 
   document.getElementById('modal-add').style.display = 'none';
   await persistCustomers();
-  toast('Customer added!');
-
-  // Reset form
-  document.getElementById('m-name').value = '';
-  document.getElementById('m-id').value   = '';
+  toast(editIndex >= 0 ? 'Customer updated!' : 'Customer added!');
 });
 
 // ── Init ───────────────────────────────────────────────────────────────────────
