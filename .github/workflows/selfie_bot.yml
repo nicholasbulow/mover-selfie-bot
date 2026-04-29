@@ -2,8 +2,8 @@ name: Mover Selfie Bot
 
 on:
   schedule:
-    - cron: "0 6 * * 1-5"   # Today — Mon–Fri at 06:00 UTC (07:00 CET)
-    - cron: "0 15 * * 4"    # Tomorrow — Thursday 15:00 UTC (covers Friday)
+    - cron: "0 6 * * 1-5"
+    - cron: "0 15 * * 4"
   workflow_dispatch:
     inputs:
       offset:
@@ -26,9 +26,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: |
-          pip install requests beautifulsoup4 playwright
-          playwright install chromium --with-deps
+        run: pip install requests beautifulsoup4
 
       - name: Run selfie bot (today)
         if: github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1-5'
