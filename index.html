@@ -654,7 +654,9 @@ async function renderCustomers() {
           <span class="tag tag-muted">${days}</span>
         </div>
       </div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-primary btn-sm" data-run-today="${i}">▶ Today</button>
+        <button class="btn btn-green btn-sm" data-run-tomorrow="${i}">▶ Tomorrow</button>
         <button class="btn btn-ghost btn-sm" data-edit="${i}">Edit</button>
         <button class="btn btn-danger btn-sm" data-del="${i}">Remove</button>
       </div>
@@ -666,6 +668,9 @@ async function renderCustomers() {
     });
 
     row.querySelector('[data-edit]').addEventListener('click', () => openEditModal(i));
+
+    row.querySelector('[data-run-today]').addEventListener('click', () => runCustomer(c, 0));
+    row.querySelector('[data-run-tomorrow]').addEventListener('click', () => runCustomer(c, 1));
 
     row.querySelector('[data-del]').addEventListener('click', async () => {
       if (!confirm(`Remove ${c.name}?`)) return;
@@ -679,8 +684,6 @@ async function renderCustomers() {
 
 async function persistCustomers() {
   try {
-    const sha = await loadCustomers().then(() => ghFetch('/contents/customers.json').then(d => d.sha));
-    // Re-fetch sha to avoid conflicts
     const fresh = await ghFetch('/contents/customers.json');
     await ghFetch('/contents/customers.json', {
       method: 'PUT',
@@ -690,7 +693,7 @@ async function persistCustomers() {
         sha: fresh.sha,
       }),
     });
-    toast('Saved to GitHub');
+    toast('Saved ✓');
     renderCustomers();
   } catch (e) {
     toast('Save failed: ' + e.message, '❌');
@@ -782,6 +785,29 @@ document.getElementById('btn-logout').addEventListener('click', () => {
   localStorage.removeItem('selfiebot_config');
   location.reload();
 });
+
+// ── Per-customer run ─────────────────────────────────────────────────────────────
+async function runCustomer(customer, offset) {
+  const label = offset === 0 ? 'today' : 'tomorrow';
+  const log = document.getElementById('log-box');
+  log.style.display = 'block';
+  log.textContent = 'Triggering run for ' + customer.name + ' (' + label + ')...
+';
+  try {
+    await ghFetch('/actions/workflows/selfie_bot.yml/dispatches', {
+      method: 'POST',
+      body: JSON.stringify({ ref: 'main', inputs: { offset: String(offset), customer_id: customer.id } }),
+    });
+    log.textContent += '✅ Triggered! Check Recent Runs for progress.
+';
+    toast('Run triggered for ' + customer.name);
+    setTimeout(renderRuns, 5000);
+  } catch (e) {
+    log.textContent += '❌ Error: ' + e.message + '
+';
+    toast('Failed: ' + e.message, '❌');
+  }
+}
 
 // ── Run buttons ────────────────────────────────────────────────────────────────
 async function runNow(offset) {
