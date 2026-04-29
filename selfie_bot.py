@@ -23,14 +23,17 @@ def create_session(email: str, password: str) -> requests.Session:
     s.headers.update({"User-Agent": "Mozilla/5.0"})
 
     # Get CSRF token from login page
-    resp = s.get(LOGIN_URL)
-    soup = BeautifulSoup(resp.text, "html.parser")
-    csrf = soup.find("input", {"name": "csrfmiddlewaretoken"})
-    if not csrf:
-        raise RuntimeError("Could not find CSRF token on login page")
+resp = session.get(LOGIN_URL)
+    # Try cookie first (Django sets csrftoken cookie on GET)
+    csrf_value = session.cookies.get("csrftoken", "")
+    if not csrf_value:
+        # Fallback: try HTML form field
+        soup = BeautifulSoup(resp.text, "html.parser")
+        csrf_input = soup.find("input", {"name": "csrfmiddlewaretoken"})
+        csrf_value = csrf_input["value"] if csrf_input else ""
 
-    login_resp = s.post(LOGIN_URL, data={
-        "csrfmiddlewaretoken": csrf["value"],
+login_resp = s.post(LOGIN_URL, data={
+        "csrfmiddlewaretoken": csrf_value,
         "username": email,
         "password": password,
     }, headers={"Referer": LOGIN_URL})
