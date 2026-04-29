@@ -1,231 +1,197 @@
 """
-Mover Selfie Bot — GitHub Actions runner
-Enables 'Required selfie on next stop' for all drivers with trips
-on configured customer accounts.
+Mover Selfie Bot — GitHub Actions runner (Playwright version)
+Uses a real headless browser so JavaScript-rendered pages work correctly.
 """
 
 import os
 import sys
 import json
 import argparse
-import re
 from datetime import date, timedelta
+from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
-import requests
-from bs4 import BeautifulSoup
-
-BASE = "https://admin.mover.dk"
+BASE      = "https://admin.mover.dk"
 LOGIN_URL = f"{BASE}/dk/da/login/"
 
-# ── Auth ───────────────────────────────────────────────────────────────────────
-
-def create_session(email: str, password: str) -> requests.Session:
-    s = requests.Session()
-    s.headers.update({"User-Agent": "Mozilla/5.0"})
-
-    # GET the login page — Django sets csrftoken cookie on this request
-    s.get(LOGIN_URL)
-
-    # Grab CSRF from cookie (most reliable for Django sites)
-    csrf_value = s.cookies.get("csrftoken", "")
-
-    login_resp = s.post(LOGIN_URL, data={
-        "csrfmiddlewaretoken": csrf_value,
-        "username": email,
-        "password": password,
-    }, headers={"Referer": LOGIN_URL, "X-CSRFToken": csrf_value})
-
-    if "/login" in login_resp.url:
-        raise RuntimeError("Login failed — check MOVER_EMAIL and MOVER_PASSWORD secrets")
-
-    print(f"✅ Logged in as {email}")
-    return s
-
-
-# ── Core logic ─────────────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def format_date(d: date) -> str:
     return d.strftime("%d-%m-%Y")
 
+def log(msg: str):
+    print(msg, flush=True)
 
-def find_selfie_checkbox(soup: BeautifulSoup):
-    """Find the selfie checkbox by locating the heading then walking forward."""
-    heading = None
-    for tag in soup.find_all(["h1","h2","h3","h4","h5","h6","legend"]):
-        if "selfie" in tag.get_text().lower():
-            heading = tag
-            break
-    if not heading:
-        return None
+# ── Login ──────────────────────────────────────────────────────────────────────
 
-    # Walk forward siblings from heading
-    node = heading.find_next_sibling()
-    while node:
-        if node.name in ["h1","h2","h3","h4","h5","h6","legend"]:
-            break
-        cb = node.find("input", type="checkbox") if hasattr(node, "find") else None
-        if cb:
-            return cb
-        if node.name == "input" and node.get("type") == "checkbox":
-            return node
-        node = node.find_next_sibling()
+def login(page, email: str, password: str):
+    page.goto(LOGIN_URL, wait_until="networkidle")
+    page.fill("input[name='username']", email)
+    page.fill("input[name='password']", password)
+    page.click("button[type='submit'], input[type='submit']")
+    page.wait_for_url(lambda url: "/login" not in url, timeout=15000)
+    log(f"✅ Logged in as {email}")
 
-    # Fallback: try parent's next sibling
-    parent = heading.parent
-    if parent:
-        node = parent.find_next_sibling()
-        while node:
-            if node.name in ["h1","h2","h3","h4","h5","h6","legend"]:
-                break
-            cb = node.find("input", type="checkbox") if hasattr(node, "find") else None
-            if cb:
-                return cb
-            node = node.find_next_sibling()
+# ── Get driver IDs for a customer on a given date ─────────────────────────────
 
-    return None
-
-
-def get_driver_ids(session: requests.Session, customer_id: str, target_date: str) -> tuple:
+def get_driver_ids(page, customer_id: str, target_date: str) -> tuple:
     trips_url = f"{BASE}/dk/da/user-area/users/{customer_id}/trips/"
-    resp = session.get(trips_url)
-    soup = BeautifulSoup(resp.text, "html.parser")
+    page.goto(trips_url, wait_until="networkidle")
 
+    # Wait for table to appear
+    try:
+        page.wait_for_selector("table tbody tr", timeout=10000)
+    except PWTimeout:
+        return [], 0
+
+    rows = page.query_selector_all("table tbody tr")
     see_more_links = []
-    for row in soup.select("table tbody tr"):
-        cells = row.find_all("td")
+
+    for row in rows:
+        cells = row.query_selector_all("td")
         if len(cells) < 2:
             continue
-        date_text = cells[1].get_text(strip=True).split()[0]
+        date_text = cells[1].inner_text().strip().split()[0]
         if date_text != target_date:
             continue
-        for a in row.find_all("a", href=True):
-            text = a.get_text(strip=True).lower()
+        for a in row.query_selector_all("a"):
+            text = a.inner_text().strip().lower()
+            href = a.get_attribute("href") or ""
             if "see" in text or "more" in text or "info" in text:
-                full = BASE + a["href"]
+                full = BASE + href if href.startswith("/") else href
                 if full not in see_more_links:
                     see_more_links.append(full)
 
     driver_ids = set()
     for url in see_more_links:
         try:
-            r = session.get(url)
-            doc = BeautifulSoup(r.text, "html.parser")
-            for a in doc.find_all("a", href=True):
-                m = re.search(r"/users/(\d+)", a["href"])
+            page.goto(url, wait_until="networkidle")
+            for a in page.query_selector_all("a[href*='/user-area/users/']"):
+                href = a.get_attribute("href") or ""
+                import re
+                m = re.search(r"/users/(\d+)", href)
                 if m and m.group(1) != customer_id:
                     driver_ids.add(m.group(1))
                     break
-        except Exception:
-            pass
+        except Exception as e:
+            log(f"  ⚠️  Could not read route page: {e}")
 
     return list(driver_ids), len(see_more_links)
 
+# ── Enable selfie for one driver ──────────────────────────────────────────────
 
-def enable_selfie(session: requests.Session, driver_id: str) -> str:
-    """Returns: 'enabled', 'already_on', or error string."""
+def find_selfie_checkbox(page):
+    """Find the selfie checkbox by locating the heading then the next checkbox."""
+    headings = page.query_selector_all("h1, h2, h3, h4, h5, h6, legend")
+    selfie_heading = None
+    for h in headings:
+        if "selfie" in h.inner_text().lower():
+            selfie_heading = h
+            break
+    if not selfie_heading:
+        return None
+
+    # Evaluate in page context to walk forward siblings
+    cb = page.evaluate("""(heading) => {
+        const HEADING_TAGS = new Set(['H1','H2','H3','H4','H5','H6','LEGEND']);
+        function walkForward(start) {
+            let node = start.nextElementSibling;
+            while (node) {
+                if (HEADING_TAGS.has(node.tagName)) break;
+                if (node.tagName === 'INPUT' && node.type === 'checkbox') return node;
+                const inner = node.querySelector('input[type="checkbox"]');
+                if (inner) return inner;
+                node = node.nextElementSibling;
+            }
+            return null;
+        }
+        return walkForward(heading) || (heading.parentElement && walkForward(heading.parentElement));
+    }""", selfie_heading)
+
+    return cb
+
+def enable_selfie(page, driver_id: str) -> str:
     url = f"{BASE}/dk/da/user-area/users/{driver_id}/settings/"
-    resp = session.get(url)
-    soup = BeautifulSoup(resp.text, "html.parser")
+    page.goto(url, wait_until="networkidle")
 
-    checkbox = find_selfie_checkbox(soup)
-    if not checkbox:
+    cb_handle = find_selfie_checkbox(page)
+    if cb_handle is None:
         return "selfie checkbox not found"
 
-    if checkbox.get("checked") is not None:
+    # Check if already enabled
+    is_checked = page.evaluate("el => el.checked", cb_handle)
+    if is_checked:
         return "already_on"
 
-    form = checkbox.find_parent("form")
-    if not form:
-        return "no form found"
+    # Click the checkbox
+    page.evaluate("el => el.click()", cb_handle)
 
-    action = form.get("action", "").strip() or url
-    if action.startswith("/"):
-        action = BASE + action
-
-    # Get CSRF from cookie (most reliable)
-    csrf = session.cookies.get("csrftoken", "")
-
-    # Build POST payload
-    payload = {"csrfmiddlewaretoken": csrf}
-    for el in form.find_all(["input", "select", "textarea"]):
-        name = el.get("name")
-        if not name or name == "csrfmiddlewaretoken":
-            continue
-        tag  = el.name
-        kind = el.get("type", "text").lower()
-
-        if tag == "select":
-            selected = el.find("option", selected=True)
-            payload[name] = selected["value"] if selected else (el.find("option") or {}).get("value", "")
-        elif tag == "textarea":
-            payload[name] = el.get_text()
-        elif kind == "checkbox":
-            if el == checkbox or el.get("checked") is not None:
-                payload[name] = el.get("value", "1")
-        elif kind == "radio":
-            if el.get("checked") is not None:
-                payload[name] = el.get("value", "on")
+    # Click Save button
+    try:
+        save_btn = page.query_selector("button[type='submit'], input[type='submit'], button:has-text('Save'), input[value='Save']")
+        if save_btn:
+            save_btn.click()
+            page.wait_for_load_state("networkidle")
         else:
-            payload[name] = el.get("value", "")
-
-    session.post(action, data=payload, headers={"Referer": url, "X-CSRFToken": csrf})
+            return "save button not found"
+    except Exception as e:
+        return f"save error: {e}"
 
     # Verify
-    verify = session.get(url)
-    vsoup  = BeautifulSoup(verify.text, "html.parser")
-    vcb    = find_selfie_checkbox(vsoup)
-    return "enabled" if (vcb and vcb.get("checked") is not None) else "save_failed"
+    page.goto(url, wait_until="networkidle")
+    cb_verify = find_selfie_checkbox(page)
+    if cb_verify and page.evaluate("el => el.checked", cb_verify):
+        return "enabled"
+    return "save_failed"
 
+# ── Run for one customer ───────────────────────────────────────────────────────
 
-# ── Runner ─────────────────────────────────────────────────────────────────────
-
-def run_customer(session: requests.Session, customer: dict, date_offset: int):
+def run_customer(page, customer: dict, date_offset: int):
+    import re
     target     = date.today() + timedelta(days=date_offset)
     target_str = format_date(target)
     label      = "today" if date_offset == 0 else "tomorrow"
 
-    print(f"\n── {customer['name']} ({customer['id']}) — {target_str} ({label})")
+    log(f"\n── {customer['name']} ({customer['id']}) — {target_str} ({label})")
 
     # Day-of-week check (0=Sun, 1=Mon ... 6=Sat)
     dow = target.isoweekday() % 7
     run_days = customer.get("run_days", list(range(7)))
     if run_days and dow not in run_days:
         day_names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
-        print(f"  ⏭️  Skipping — not scheduled for {day_names[dow]}")
+        log(f"  ⏭️  Skipping — not scheduled for {day_names[dow]}")
         return
 
-    driver_ids, trip_count = get_driver_ids(session, customer["id"], target_str)
+    driver_ids, trip_count = get_driver_ids(page, customer["id"], target_str)
 
     if not trip_count:
-        print(f"  ⚠️  No trips found for {target_str}")
+        log(f"  ⚠️  No trips found for {target_str}")
         return
-
     if not driver_ids:
-        print(f"  ⚠️  No driver IDs found ({trip_count} trips)")
+        log(f"  ⚠️  No driver IDs found ({trip_count} trips)")
         return
 
-    print(f"  Found {len(driver_ids)} driver(s) across {trip_count} trip(s)")
+    log(f"  Found {len(driver_ids)} driver(s) across {trip_count} trip(s)")
 
     enabled = alreadyon = failed = 0
     for did in sorted(driver_ids):
-        result = enable_selfie(session, did)
-        if   result == "enabled":    print(f"  ✅ Driver {did}: enabled");    enabled += 1
-        elif result == "already_on": print(f"  ⏭️  Driver {did}: already on"); alreadyon += 1
-        else:                        print(f"  ❌ Driver {did}: {result}");    failed += 1
+        result = enable_selfie(page, did)
+        if   result == "enabled":    log(f"  ✅ Driver {did}: enabled");    enabled += 1
+        elif result == "already_on": log(f"  ⏭️  Driver {did}: already on"); alreadyon += 1
+        else:                        log(f"  ❌ Driver {did}: {result}");    failed += 1
 
-    print(f"  ── ✅ {enabled}  ⏭️  {alreadyon}  ❌ {failed}")
+    log(f"  ── ✅ {enabled}  ⏭️  {alreadyon}  ❌ {failed}")
 
+# ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--offset", type=int, default=0,
-                        help="Date offset: 0=today, 1=tomorrow")
+    parser.add_argument("--offset", type=int, default=0)
     args = parser.parse_args()
 
     email    = os.environ.get("MOVER_EMAIL")
     password = os.environ.get("MOVER_PASSWORD")
     if not email or not password:
-        print("❌ MOVER_EMAIL and MOVER_PASSWORD environment variables required")
+        log("❌ MOVER_EMAIL and MOVER_PASSWORD environment variables required")
         sys.exit(1)
 
     config_path = os.path.join(os.path.dirname(__file__), "customers.json")
@@ -234,21 +200,26 @@ def main():
 
     active = [c for c in customers if c.get("enabled", True)]
     if not active:
-        print("No active customers in customers.json")
+        log("No active customers in customers.json")
         return
 
-    session = create_session(email, password)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page    = browser.new_page()
 
-    for customer in active:
-        should_run = customer.get("run_today") if args.offset == 0 else customer.get("run_tomorrow")
-        if not should_run:
-            label = "today" if args.offset == 0 else "tomorrow"
-            print(f"\nSkipping {customer['name']} (not configured for {label})")
-            continue
-        run_customer(session, customer, args.offset)
+        login(page, email, password)
 
-    print("\n══ All done ══════════════════════")
+        for customer in active:
+            should_run = customer.get("run_today") if args.offset == 0 else customer.get("run_tomorrow")
+            if not should_run:
+                label = "today" if args.offset == 0 else "tomorrow"
+                log(f"\nSkipping {customer['name']} (not configured for {label})")
+                continue
+            run_customer(page, customer, args.offset)
 
+        browser.close()
+
+    log("\n══ All done ══════════════════════")
 
 if __name__ == "__main__":
     main()
