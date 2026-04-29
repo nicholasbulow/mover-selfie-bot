@@ -789,23 +789,20 @@ document.getElementById('btn-logout').addEventListener('click', () => {
 // ── Per-customer run ─────────────────────────────────────────────────────────────
 async function runCustomer(customer, offset) {
   const label = offset === 0 ? 'today' : 'tomorrow';
-  const log = document.getElementById('log-box');
-  log.style.display = 'block';
-  log.textContent = 'Triggering run for ' + customer.name + ' (' + label + ')...
-';
+  const logEl = document.getElementById('log-box');
+  logEl.style.display = 'block';
+  logEl.textContent = 'Triggering ' + customer.name + ' for ' + label + '...';
   try {
     await ghFetch('/actions/workflows/selfie_bot.yml/dispatches', {
       method: 'POST',
       body: JSON.stringify({ ref: 'main', inputs: { offset: String(offset), customer_id: customer.id } }),
     });
-    log.textContent += '✅ Triggered! Check Recent Runs for progress.
-';
+    logEl.textContent += ' Done! Check Recent Runs.';
     toast('Run triggered for ' + customer.name);
     setTimeout(renderRuns, 5000);
   } catch (e) {
-    log.textContent += '❌ Error: ' + e.message + '
-';
-    toast('Failed: ' + e.message, '❌');
+    logEl.textContent += ' Error: ' + e.message;
+    toast('Failed: ' + e.message, 'X');
   }
 }
 
