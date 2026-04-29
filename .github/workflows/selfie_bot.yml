@@ -1,0 +1,55 @@
+name: Mover Selfie Bot
+
+on:
+  schedule:
+    # Runs every day at 06:00 UTC (adjust to your timezone)
+    # 06:00 UTC = 07:00 CET (winter) / 08:00 CEST (summer)
+    - cron: "0 6 * * 1-5"   # Today — Mon to Fri at 06:00 UTC
+    - cron: "0 15 * * 4"    # Tomorrow — Thursday at 15:00 UTC (covers Friday routes)
+
+  # Allows you to trigger manually from GitHub
+  workflow_dispatch:
+    inputs:
+      offset:
+        description: "Date offset (0=today, 1=tomorrow)"
+        required: true
+        default: "0"
+        type: choice
+        options: ["0", "1"]
+
+jobs:
+  run-selfie-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run selfie bot (today)
+        if: github.event_name == 'schedule' && github.event.schedule == '0 6 * * 1-5'
+        env:
+          MOVER_EMAIL:    ${{ secrets.MOVER_EMAIL }}
+          MOVER_PASSWORD: ${{ secrets.MOVER_PASSWORD }}
+        run: python selfie_bot.py --offset 0
+
+      - name: Run selfie bot (tomorrow)
+        if: github.event_name == 'schedule' && github.event.schedule == '0 15 * * 4'
+        env:
+          MOVER_EMAIL:    ${{ secrets.MOVER_EMAIL }}
+          MOVER_PASSWORD: ${{ secrets.MOVER_PASSWORD }}
+        run: python selfie_bot.py --offset 1
+
+      - name: Run selfie bot (manual)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          MOVER_EMAIL:    ${{ secrets.MOVER_EMAIL }}
+          MOVER_PASSWORD: ${{ secrets.MOVER_PASSWORD }}
+        run: python selfie_bot.py --offset ${{ github.event.inputs.offset }}
