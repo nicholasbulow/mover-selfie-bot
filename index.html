@@ -512,25 +512,6 @@
         <input class="form-input" id="m-name" placeholder="e.g. IKEA NL">
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Enable selfies for</label>
-      <div class="checkrow">
-        <label class="check-label"><input type="checkbox" id="m-today" checked> Today</label>
-        <label class="check-label"><input type="checkbox" id="m-tomorrow" checked> Tomorrow</label>
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Run on these days</label>
-      <div class="day-pills" id="m-days">
-        <label class="day-pill"><input type="checkbox" value="1" checked><span>Mon</span></label>
-        <label class="day-pill"><input type="checkbox" value="2" checked><span>Tue</span></label>
-        <label class="day-pill"><input type="checkbox" value="3" checked><span>Wed</span></label>
-        <label class="day-pill"><input type="checkbox" value="4" checked><span>Thu</span></label>
-        <label class="day-pill"><input type="checkbox" value="5" checked><span>Fri</span></label>
-        <label class="day-pill"><input type="checkbox" value="6"><span>Sat</span></label>
-        <label class="day-pill"><input type="checkbox" value="0"><span>Sun</span></label>
-      </div>
-    </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="btn-modal-cancel">Cancel</button>
       <button class="btn btn-primary" id="btn-modal-save">Add Customer</button>
@@ -632,10 +613,6 @@ async function renderCustomers() {
 
   el.innerHTML = '';
   customers.forEach((c, i) => {
-    const days = !c.run_days || c.run_days.length === 7
-      ? 'Every day'
-      : c.run_days.map(d => DAY_NAMES[d]).join(', ');
-
     const row = document.createElement('div');
     row.className = 'customer-row';
     row.innerHTML = `
@@ -648,11 +625,7 @@ async function renderCustomers() {
           <span class="customer-name">${c.name}</span>
           <span class="customer-id">ID: ${c.id}</span>
         </div>
-        <div class="tags" style="margin-top:5px">
-          ${c.run_today    ? '<span class="tag tag-blue">Today</span>'    : ''}
-          ${c.run_tomorrow ? '<span class="tag tag-green">Tomorrow</span>': ''}
-          <span class="tag tag-muted">${days}</span>
-        </div>
+
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="btn btn-primary btn-sm" data-run-today="${i}">▶ Today</button>
@@ -839,11 +812,7 @@ function openAddModal() {
   document.getElementById('btn-modal-save').textContent = 'Add Customer';
   document.getElementById('m-id').value   = '';
   document.getElementById('m-name').value = '';
-  document.getElementById('m-today').checked    = true;
-  document.getElementById('m-tomorrow').checked = true;
-  document.querySelectorAll('#m-days input').forEach(el => {
-    el.checked = ['1','2','3','4','5'].includes(el.value);
-  });
+
   document.getElementById('modal-add').style.display = 'flex';
 }
 
@@ -854,11 +823,7 @@ function openEditModal(i) {
   document.getElementById('btn-modal-save').textContent = 'Save Changes';
   document.getElementById('m-id').value   = c.id;
   document.getElementById('m-name').value = c.name || '';
-  document.getElementById('m-today').checked    = !!c.run_today;
-  document.getElementById('m-tomorrow').checked = !!c.run_tomorrow;
-  document.querySelectorAll('#m-days input').forEach(el => {
-    el.checked = (c.run_days || [1,2,3,4,5]).includes(Number(el.value));
-  });
+
   document.getElementById('modal-add').style.display = 'flex';
 }
 
@@ -876,13 +841,9 @@ document.getElementById('btn-modal-save').addEventListener('click', async () => 
   const name = document.getElementById('m-name').value.trim() || id;
   if (!id) { toast('Customer ID is required', '⚠️'); return; }
 
-  const runDays = [...document.querySelectorAll('#m-days input:checked')].map(el => Number(el.value));
   const customer = {
     id, name,
-    enabled:      editIndex >= 0 ? (customers[editIndex].enabled !== false) : true,
-    run_today:    document.getElementById('m-today').checked,
-    run_tomorrow: document.getElementById('m-tomorrow').checked,
-    run_days:     runDays,
+    enabled: editIndex >= 0 ? (customers[editIndex].enabled !== false) : true,
   };
 
   if (editIndex >= 0) {
