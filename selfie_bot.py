@@ -1,6 +1,5 @@
 """
 Mover Selfie Bot — GitHub Actions runner
-Pure requests-based — no browser needed, page is server-rendered.
 """
 
 import os
@@ -28,18 +27,44 @@ def login(email: str, password: str) -> requests.Session:
     s = requests.Session()
     s.headers.update({"User-Agent": "Mozilla/5.0"})
 
-    s.get(LOGIN_URL)
+    resp = s.get(LOGIN_URL)
     csrf = s.cookies.get("csrftoken", "")
+    log(f"  Login page: {resp.url} | CSRF: {'✓' if csrf else '✗'}")
+
+    # Find the actual form field names from the page
+    soup = BeautifulSoup(resp.text, "html.parser")
+    form = soup.find("form")
+    if form:
+        fields = [(i.get("name",""), i.get("type","")) for i in form.find_all("input")]
+        log(f"  Form fields: {fields}")
+
+    # Build payload with all possible field name variants
+    # We'll try the ones we see in the form
+    email_field = "loginEmail"
+    password_field = "loginPassword"
+
+    # Try to detect field names from the form
+    if form:
+        for inp in form.find_all("input"):
+            t = inp.get("type","").lower()
+            n = inp.get("name","")
+            if t == "email" or (t == "text" and "email" in n.lower()):
+                email_field = n
+            elif t == "password":
+                password_field = n
+
+    log(f"  Using fields: email={email_field}, password={password_field}")
 
     resp = s.post(LOGIN_URL, data={
         "csrfmiddlewaretoken": csrf,
-        "loginEmail":  email,      # Mover uses loginEmail, not username
-        "loginPassword": password,  # Mover uses loginPassword, not password
+        email_field:    email,
+        password_field: password,
     }, headers={"Referer": LOGIN_URL, "X-CSRFToken": csrf})
 
-    # Verify we're actually authenticated by checking the response
-    if "/login" in resp.url or "loginEmail" in resp.text:
-        raise RuntimeError("Login failed — check MOVER_EMAIL and MOVER_PASSWORD")
+    log(f"  Post-login URL: {resp.url}")
+
+    if "/login" in resp.url:
+        raise RuntimeError("Login failed — URL still on login page. Check MOVER_EMAIL and MOVER_PASSWORD secrets.")
 
     log(f"✅ Logged in as {email}")
     return s
@@ -49,6 +74,7 @@ def login(email: str, password: str) -> requests.Session:
 def get_driver_ids(session: requests.Session, customer_id: str, target_date: str) -> tuple:
     trips_url = f"{BASE}/dk/da/user-area/users/{customer_id}/trips/"
     resp = session.get(trips_url)
+    log(f"  Trips page URL: {resp.url}")
     soup = BeautifulSoup(resp.text, "html.parser")
 
     rows = soup.select("table tbody tr")
@@ -166,7 +192,6 @@ def enable_selfie(session: requests.Session, driver_id: str) -> str:
 
     session.post(action, data=payload, headers={"Referer": url, "X-CSRFToken": csrf})
 
-    # Verify
     verify = session.get(url)
     vsoup  = BeautifulSoup(verify.text, "html.parser")
     vcb    = find_selfie_checkbox(vsoup)
