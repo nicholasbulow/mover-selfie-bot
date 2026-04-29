@@ -8,6 +8,7 @@ import os
 import sys
 import json
 import argparse
+import re
 from datetime import date, timedelta
 
 import requests
@@ -22,21 +23,17 @@ def create_session(email: str, password: str) -> requests.Session:
     s = requests.Session()
     s.headers.update({"User-Agent": "Mozilla/5.0"})
 
-    # Get CSRF token from login page
-resp = session.get(LOGIN_URL)
-    # Try cookie first (Django sets csrftoken cookie on GET)
-    csrf_value = session.cookies.get("csrftoken", "")
-    if not csrf_value:
-        # Fallback: try HTML form field
-        soup = BeautifulSoup(resp.text, "html.parser")
-        csrf_input = soup.find("input", {"name": "csrfmiddlewaretoken"})
-        csrf_value = csrf_input["value"] if csrf_input else ""
+    # GET the login page — Django sets csrftoken cookie on this request
+    s.get(LOGIN_URL)
 
-login_resp = s.post(LOGIN_URL, data={
+    # Grab CSRF from cookie (most reliable for Django sites)
+    csrf_value = s.cookies.get("csrftoken", "")
+
+    login_resp = s.post(LOGIN_URL, data={
         "csrfmiddlewaretoken": csrf_value,
         "username": email,
         "password": password,
-    }, headers={"Referer": LOGIN_URL})
+    }, headers={"Referer": LOGIN_URL, "X-CSRFToken": csrf_value})
 
     if "/login" in login_resp.url:
         raise RuntimeError("Login failed — check MOVER_EMAIL and MOVER_PASSWORD secrets")
@@ -88,7 +85,7 @@ def find_selfie_checkbox(soup: BeautifulSoup):
     return None
 
 
-def get_driver_ids(session: requests.Session, customer_id: str, target_date: str) -> tuple[list, int]:
+def get_driver_ids(session: requests.Session, customer_id: str, target_date: str) -> tuple:
     trips_url = f"{BASE}/dk/da/user-area/users/{customer_id}/trips/"
     resp = session.get(trips_url)
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -114,7 +111,6 @@ def get_driver_ids(session: requests.Session, customer_id: str, target_date: str
             r = session.get(url)
             doc = BeautifulSoup(r.text, "html.parser")
             for a in doc.find_all("a", href=True):
-                import re
                 m = re.search(r"/users/(\d+)", a["href"])
                 if m and m.group(1) != customer_id:
                     driver_ids.add(m.group(1))
@@ -146,9 +142,8 @@ def enable_selfie(session: requests.Session, driver_id: str) -> str:
     if action.startswith("/"):
         action = BASE + action
 
-    # Get CSRF from form
-    csrf_input = form.find("input", {"name": "csrfmiddlewaretoken"})
-    csrf = csrf_input["value"] if csrf_input else ""
+    # Get CSRF from cookie (most reliable)
+    csrf = session.cookies.get("csrftoken", "")
 
     # Build POST payload
     payload = {"csrfmiddlewaretoken": csrf}
@@ -165,7 +160,6 @@ def enable_selfie(session: requests.Session, driver_id: str) -> str:
         elif tag == "textarea":
             payload[name] = el.get_text()
         elif kind == "checkbox":
-            # Force selfie on; preserve other checked boxes
             if el == checkbox or el.get("checked") is not None:
                 payload[name] = el.get("value", "1")
         elif kind == "radio":
@@ -186,15 +180,14 @@ def enable_selfie(session: requests.Session, driver_id: str) -> str:
 # ── Runner ─────────────────────────────────────────────────────────────────────
 
 def run_customer(session: requests.Session, customer: dict, date_offset: int):
-    target      = date.today() + timedelta(days=date_offset)
-    target_str  = format_date(target)
-    label       = "today" if date_offset == 0 else "tomorrow"
+    target     = date.today() + timedelta(days=date_offset)
+    target_str = format_date(target)
+    label      = "today" if date_offset == 0 else "tomorrow"
 
     print(f"\n── {customer['name']} ({customer['id']}) — {target_str} ({label})")
 
-    # Day-of-week check
-    day = target.weekday() + 1  # Mon=1 ... Sun=7, convert to 0=Sun..6=Sat
-    dow = target.isoweekday() % 7  # Sun=0, Mon=1 ... Sat=6
+    # Day-of-week check (0=Sun, 1=Mon ... 6=Sat)
+    dow = target.isoweekday() % 7
     run_days = customer.get("run_days", list(range(7)))
     if run_days and dow not in run_days:
         day_names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
@@ -235,7 +228,6 @@ def main():
         print("❌ MOVER_EMAIL and MOVER_PASSWORD environment variables required")
         sys.exit(1)
 
-    # Load customer config
     config_path = os.path.join(os.path.dirname(__file__), "customers.json")
     with open(config_path) as f:
         customers = json.load(f)
@@ -247,11 +239,11 @@ def main():
 
     session = create_session(email, password)
 
-    total_enabled = 0
     for customer in active:
         should_run = customer.get("run_today") if args.offset == 0 else customer.get("run_tomorrow")
         if not should_run:
-            print(f"\nSkipping {customer['name']} (not configured for {'today' if args.offset == 0 else 'tomorrow'})")
+            label = "today" if args.offset == 0 else "tomorrow"
+            print(f"\nSkipping {customer['name']} (not configured for {label})")
             continue
         run_customer(session, customer, args.offset)
 
