@@ -12,8 +12,7 @@ from datetime import date, timedelta
 import requests
 from bs4 import BeautifulSoup
 
-BASE      = "https://admin.mover.dk"
-LOGIN_URL = f"{BASE}/dk/da/login/"
+BASE = "https://admin.mover.dk"
 
 def log(msg: str):
     print(msg, flush=True)
@@ -27,44 +26,49 @@ def login(email: str, password: str) -> requests.Session:
     s = requests.Session()
     s.headers.update({"User-Agent": "Mozilla/5.0"})
 
-    resp = s.get(LOGIN_URL)
-    csrf = s.cookies.get("csrftoken", "")
-    log(f"  Login page: {resp.url} | CSRF: {'✓' if csrf else '✗'}")
-
-    # Find the actual form field names from the page
+    # The login form lives at /dk/da/user-area/ when not authenticated
+    login_page = f"{BASE}/dk/da/user-area/"
+    resp = s.get(login_page)
     soup = BeautifulSoup(resp.text, "html.parser")
+
     form = soup.find("form")
-    if form:
-        fields = [(i.get("name",""), i.get("type","")) for i in form.find_all("input")]
-        log(f"  Form fields: {fields}")
+    if not form:
+        raise RuntimeError("Login form not found on page")
 
-    # Build payload with all possible field name variants
-    # We'll try the ones we see in the form
-    email_field = "loginEmail"
-    password_field = "loginPassword"
+    # Use the form's action URL, falling back to the page URL
+    action = form.get("action", "").strip()
+    if not action:
+        action = resp.url
+    if action.startswith("/"):
+        action = BASE + action
 
-    # Try to detect field names from the form
-    if form:
-        for inp in form.find_all("input"):
-            t = inp.get("type","").lower()
-            n = inp.get("name","")
-            if t == "email" or (t == "text" and "email" in n.lower()):
-                email_field = n
-            elif t == "password":
-                password_field = n
+    # Build POST payload from ALL form inputs
+    # - hidden fields: include their existing value (e.g. CSRF tokens)
+    # - text fields: fill with email
+    # - password fields: fill with password
+    payload = {}
+    for inp in form.find_all("input"):
+        name = inp.get("name", "")
+        if not name:
+            continue
+        kind = inp.get("type", "text").lower()
+        if kind == "hidden":
+            payload[name] = inp.get("value", "")
+        elif kind in ("text", "email"):
+            payload[name] = email
+        elif kind == "password":
+            payload[name] = password
+        # skip submit buttons
 
-    log(f"  Using fields: email={email_field}, password={password_field}")
+    log(f"  Posting to: {action} | Fields: {list(payload.keys())}")
 
-    resp = s.post(LOGIN_URL, data={
-        "csrfmiddlewaretoken": csrf,
-        email_field:    email,
-        password_field: password,
-    }, headers={"Referer": LOGIN_URL, "X-CSRFToken": csrf})
-
+    resp = s.post(action, data=payload, headers={"Referer": login_page})
     log(f"  Post-login URL: {resp.url}")
 
-    if "/login" in resp.url:
-        raise RuntimeError("Login failed — URL still on login page. Check MOVER_EMAIL and MOVER_PASSWORD secrets.")
+    # Check success: if login failed, the password field will still be on the page
+    post_soup = BeautifulSoup(resp.text, "html.parser")
+    if post_soup.find("input", {"type": "password"}):
+        raise RuntimeError("Login failed — still on login page. Check MOVER_EMAIL and MOVER_PASSWORD secrets.")
 
     log(f"✅ Logged in as {email}")
     return s
@@ -74,7 +78,6 @@ def login(email: str, password: str) -> requests.Session:
 def get_driver_ids(session: requests.Session, customer_id: str, target_date: str) -> tuple:
     trips_url = f"{BASE}/dk/da/user-area/users/{customer_id}/trips/"
     resp = session.get(trips_url)
-    log(f"  Trips page URL: {resp.url}")
     soup = BeautifulSoup(resp.text, "html.parser")
 
     rows = soup.select("table tbody tr")
