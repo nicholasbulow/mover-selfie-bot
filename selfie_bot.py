@@ -253,10 +253,19 @@ def main():
     with open(config_path) as f:
         customers = json.load(f)
 
-    active = [c for c in customers if c.get("enabled", True)]
-    if not active:
-        log("No active customers configured")
-        return
+    # If a specific customer ID is provided, only run that one
+    target_id = os.environ.get("CUSTOMER_ID", "").strip()
+    if target_id:
+        active = [c for c in customers if c.get("id") == target_id]
+        if not active:
+            log(f"Customer ID {target_id} not found in customers.json")
+            return
+        log(f"Running for specific customer: {active[0]['name']} ({target_id})")
+    else:
+        active = [c for c in customers if c.get("enabled", True)]
+        if not active:
+            log("No active customers configured")
+            return
 
     session = login(email, password)
 
