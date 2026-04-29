@@ -1,6 +1,6 @@
 """
 Mover Selfie Bot — GitHub Actions runner
-Hybrid approach: requests for login, Playwright for JS-rendered pages.
+Pure requests-based — no browser needed, page is server-rendered.
 """
 
 import os
@@ -12,7 +12,6 @@ from datetime import date, timedelta
 
 import requests
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 BASE      = "https://admin.mover.dk"
 LOGIN_URL = f"{BASE}/dk/da/login/"
@@ -23,66 +22,50 @@ def log(msg: str):
 def format_date(d: date) -> str:
     return d.strftime("%d-%m-%Y")
 
-# ── Step 1: Login with requests (proven to work) ───────────────────────────────
+# ── Login ──────────────────────────────────────────────────────────────────────
 
-def requests_login(email: str, password: str) -> list:
-    """Returns a list of cookie dicts for Playwright."""
+def login(email: str, password: str) -> requests.Session:
     s = requests.Session()
     s.headers.update({"User-Agent": "Mozilla/5.0"})
 
-    # GET login page to obtain CSRF cookie
     s.get(LOGIN_URL)
     csrf = s.cookies.get("csrftoken", "")
 
     resp = s.post(LOGIN_URL, data={
         "csrfmiddlewaretoken": csrf,
-        "username": email,
-        "password": password,
+        "loginEmail":  email,      # Mover uses loginEmail, not username
+        "loginPassword": password,  # Mover uses loginPassword, not password
     }, headers={"Referer": LOGIN_URL, "X-CSRFToken": csrf})
 
-    if "/login" in resp.url:
-        raise RuntimeError("Login failed — check MOVER_EMAIL and MOVER_PASSWORD secrets")
+    # Verify we're actually authenticated by checking the response
+    if "/login" in resp.url or "loginEmail" in resp.text:
+        raise RuntimeError("Login failed — check MOVER_EMAIL and MOVER_PASSWORD")
 
     log(f"✅ Logged in as {email}")
+    return s
 
-    # Convert requests cookies to Playwright cookie format
-    playwright_cookies = []
-    for c in s.cookies:
-        playwright_cookies.append({
-            "name":   c.name,
-            "value":  c.value,
-            "domain": c.domain or "admin.mover.dk",
-            "path":   c.path or "/",
-        })
-    return playwright_cookies
+# ── Get driver IDs ─────────────────────────────────────────────────────────────
 
-# ── Step 2: Use Playwright with those cookies ──────────────────────────────────
-
-def get_driver_ids(page, customer_id: str, target_date: str) -> tuple:
+def get_driver_ids(session: requests.Session, customer_id: str, target_date: str) -> tuple:
     trips_url = f"{BASE}/dk/da/user-area/users/{customer_id}/trips/"
-    page.goto(trips_url)
-    page.wait_for_load_state("networkidle", timeout=20000)
+    resp = session.get(trips_url)
+    soup = BeautifulSoup(resp.text, "html.parser")
 
-    try:
-        page.wait_for_selector("table tbody tr", timeout=10000)
-    except PWTimeout:
-        log("  ⚠️  Trips table not found")
-        return [], 0
+    rows = soup.select("table tbody tr")
+    log(f"  Page has {len(rows)} total trip rows")
 
-    rows = page.query_selector_all("table tbody tr")
     see_more_links = []
-
     for row in rows:
-        cells = row.query_selector_all("td")
+        cells = row.find_all("td")
         if len(cells) < 2:
             continue
-        date_text = cells[1].inner_text().strip().split()[0]
+        date_text = cells[1].get_text(strip=True).split()[0]
         if date_text != target_date:
             continue
-        for a in row.query_selector_all("a"):
-            text = a.inner_text().strip().lower()
-            href = a.get_attribute("href") or ""
+        for a in row.find_all("a", href=True):
+            text = a.get_text(strip=True).lower()
             if "see" in text or "more" in text or "info" in text:
+                href = a["href"]
                 full = BASE + href if href.startswith("/") else href
                 if full not in see_more_links:
                     see_more_links.append(full)
@@ -92,10 +75,10 @@ def get_driver_ids(page, customer_id: str, target_date: str) -> tuple:
     driver_ids = set()
     for url in see_more_links:
         try:
-            page.goto(url, wait_until="networkidle")
-            for a in page.query_selector_all("a"):
-                href = a.get_attribute("href") or ""
-                m = re.search(r"/users/(\d+)", href)
+            r = session.get(url)
+            doc = BeautifulSoup(r.text, "html.parser")
+            for a in doc.find_all("a", href=True):
+                m = re.search(r"/users/(\d+)", a["href"])
                 if m and m.group(1) != customer_id:
                     driver_ids.add(m.group(1))
                     break
@@ -104,60 +87,94 @@ def get_driver_ids(page, customer_id: str, target_date: str) -> tuple:
 
     return list(driver_ids), len(see_more_links)
 
-def find_selfie_checkbox(page):
-    headings = page.query_selector_all("h1,h2,h3,h4,h5,h6,legend")
-    selfie_heading = None
-    for h in headings:
-        if "selfie" in h.inner_text().lower():
-            selfie_heading = h
+# ── Enable selfie ──────────────────────────────────────────────────────────────
+
+def find_selfie_checkbox(soup: BeautifulSoup):
+    heading = None
+    for tag in soup.find_all(["h1","h2","h3","h4","h5","h6","legend"]):
+        if "selfie" in tag.get_text().lower():
+            heading = tag
             break
-    if not selfie_heading:
+    if not heading:
         return None
 
-    return page.evaluate("""(heading) => {
-        const TAGS = new Set(['H1','H2','H3','H4','H5','H6','LEGEND']);
-        function walk(start) {
-            let node = start.nextElementSibling;
-            while (node) {
-                if (TAGS.has(node.tagName)) break;
-                if (node.tagName === 'INPUT' && node.type === 'checkbox') return node;
-                const inner = node.querySelector('input[type="checkbox"]');
-                if (inner) return inner;
-                node = node.nextElementSibling;
-            }
-            return null;
-        }
-        return walk(heading) || (heading.parentElement && walk(heading.parentElement));
-    }""", selfie_heading)
+    node = heading.find_next_sibling()
+    while node:
+        if node.name in ["h1","h2","h3","h4","h5","h6","legend"]:
+            break
+        cb = node.find("input", type="checkbox") if hasattr(node, "find") else None
+        if cb:
+            return cb
+        if node.name == "input" and node.get("type") == "checkbox":
+            return node
+        node = node.find_next_sibling()
 
-def enable_selfie(page, driver_id: str) -> str:
+    if heading.parent:
+        node = heading.parent.find_next_sibling()
+        while node:
+            if node.name in ["h1","h2","h3","h4","h5","h6","legend"]:
+                break
+            cb = node.find("input", type="checkbox") if hasattr(node, "find") else None
+            if cb:
+                return cb
+            node = node.find_next_sibling()
+
+    return None
+
+def enable_selfie(session: requests.Session, driver_id: str) -> str:
     url = f"{BASE}/dk/da/user-area/users/{driver_id}/settings/"
-    page.goto(url, wait_until="networkidle")
+    resp = session.get(url)
+    soup = BeautifulSoup(resp.text, "html.parser")
 
-    cb = find_selfie_checkbox(page)
-    if cb is None:
+    checkbox = find_selfie_checkbox(soup)
+    if not checkbox:
         return "selfie checkbox not found"
-
-    is_checked = page.evaluate("el => el.checked", cb)
-    if is_checked:
+    if checkbox.get("checked") is not None:
         return "already_on"
 
-    page.evaluate("el => el.click()", cb)
+    form = checkbox.find_parent("form")
+    if not form:
+        return "no form found"
 
-    save = page.query_selector("input[value='Save'], button:has-text('Save'), button[type='submit']")
-    if not save:
-        return "save button not found"
-    save.click()
-    page.wait_for_load_state("networkidle")
+    action = form.get("action", "").strip() or url
+    if action.startswith("/"):
+        action = BASE + action
+
+    csrf = session.cookies.get("csrftoken", "")
+    payload = {"csrfmiddlewaretoken": csrf}
+
+    for el in form.find_all(["input", "select", "textarea"]):
+        name = el.get("name")
+        if not name or name == "csrfmiddlewaretoken":
+            continue
+        tag  = el.name
+        kind = el.get("type", "text").lower()
+
+        if tag == "select":
+            selected = el.find("option", selected=True)
+            payload[name] = selected["value"] if selected else (el.find("option") or {}).get("value", "")
+        elif tag == "textarea":
+            payload[name] = el.get_text()
+        elif kind == "checkbox":
+            if el == checkbox or el.get("checked") is not None:
+                payload[name] = el.get("value", "1")
+        elif kind == "radio":
+            if el.get("checked") is not None:
+                payload[name] = el.get("value", "on")
+        else:
+            payload[name] = el.get("value", "")
+
+    session.post(action, data=payload, headers={"Referer": url, "X-CSRFToken": csrf})
 
     # Verify
-    page.goto(url, wait_until="networkidle")
-    cb2 = find_selfie_checkbox(page)
-    if cb2 and page.evaluate("el => el.checked", cb2):
-        return "enabled"
-    return "save_failed"
+    verify = session.get(url)
+    vsoup  = BeautifulSoup(verify.text, "html.parser")
+    vcb    = find_selfie_checkbox(vsoup)
+    return "enabled" if (vcb and vcb.get("checked") is not None) else "save_failed"
 
-def run_customer(page, customer: dict, date_offset: int):
+# ── Run customer ───────────────────────────────────────────────────────────────
+
+def run_customer(session: requests.Session, customer: dict, date_offset: int):
     target     = date.today() + timedelta(days=date_offset)
     target_str = format_date(target)
     label      = "today" if date_offset == 0 else "tomorrow"
@@ -171,7 +188,7 @@ def run_customer(page, customer: dict, date_offset: int):
         log(f"  ⏭️  Skipping — not scheduled for {day_names[dow]}")
         return
 
-    driver_ids, trip_count = get_driver_ids(page, customer["id"], target_str)
+    driver_ids, trip_count = get_driver_ids(session, customer["id"], target_str)
 
     if not trip_count:
         log(f"  ⚠️  No trips found for {target_str}")
@@ -184,12 +201,14 @@ def run_customer(page, customer: dict, date_offset: int):
 
     enabled = alreadyon = failed = 0
     for did in sorted(driver_ids):
-        result = enable_selfie(page, did)
+        result = enable_selfie(session, did)
         if   result == "enabled":    log(f"  ✅ Driver {did}: enabled");    enabled += 1
         elif result == "already_on": log(f"  ⏭️  Driver {did}: already on"); alreadyon += 1
         else:                        log(f"  ❌ Driver {did}: {result}");    failed += 1
 
     log(f"  ── ✅ {enabled}  ⏭️  {alreadyon}  ❌ {failed}")
+
+# ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser()
@@ -211,26 +230,15 @@ def main():
         log("No active customers configured")
         return
 
-    # Login with requests (proven reliable)
-    cookies = requests_login(email, password)
+    session = login(email, password)
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
-
-        # Inject login cookies so Playwright is already authenticated
-        context.add_cookies(cookies)
-        page = context.new_page()
-
-        for customer in active:
-            should_run = customer.get("run_today") if args.offset == 0 else customer.get("run_tomorrow")
-            if not should_run:
-                label = "today" if args.offset == 0 else "tomorrow"
-                log(f"\nSkipping {customer['name']} (not configured for {label})")
-                continue
-            run_customer(page, customer, args.offset)
-
-        browser.close()
+    for customer in active:
+        should_run = customer.get("run_today") if args.offset == 0 else customer.get("run_tomorrow")
+        if not should_run:
+            label = "today" if args.offset == 0 else "tomorrow"
+            log(f"\nSkipping {customer['name']} (not configured for {label})")
+            continue
+        run_customer(session, customer, args.offset)
 
     log("\n══ All done ══════════════════════")
 
