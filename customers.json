@@ -14,5 +14,13 @@
     "run_today": false,
     "run_tomorrow": false,
     "run_days": []
+  },
+  {
+    "id": "1341477",
+    "name": "IKEA NO",
+    "enabled": true,
+    "run_today": false,
+    "run_tomorrow": false,
+    "run_days": []
   }
 ]
