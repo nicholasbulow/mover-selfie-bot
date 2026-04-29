@@ -209,13 +209,6 @@ def run_customer(session: requests.Session, customer: dict, date_offset: int):
 
     log(f"\n── {customer['name']} ({customer['id']}) — {target_str} ({label})")
 
-    dow      = target.isoweekday() % 7
-    run_days = customer.get("run_days", list(range(7)))
-    if run_days and dow not in run_days:
-        day_names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]
-        log(f"  ⏭️  Skipping — not scheduled for {day_names[dow]}")
-        return
-
     driver_ids, trip_count = get_driver_ids(session, customer["id"], target_str)
 
     if not trip_count:
@@ -270,11 +263,6 @@ def main():
     session = login(email, password)
 
     for customer in active:
-        should_run = customer.get("run_today") if args.offset == 0 else customer.get("run_tomorrow")
-        if not should_run:
-            label = "today" if args.offset == 0 else "tomorrow"
-            log(f"\nSkipping {customer['name']} (not configured for {label})")
-            continue
         run_customer(session, customer, args.offset)
 
     log("\n══ All done ══════════════════════")
