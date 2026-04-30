@@ -337,6 +337,17 @@
   </div>
 </div>
 
+<div id="modal-routes" class="modal-overlay">
+  <div class="modal" style="max-width:600px">
+    <h3 id="modal-routes-title">Route Links</h3>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Click any link to view the selfie for that route.</p>
+    <div id="modal-routes-list" style="max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-outline light" id="btn-routes-close">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -367,6 +378,34 @@ async function ghFetch(path, opts) {
 async function loadCustomers() {
   const data = await ghFetch('/contents/customers.json');
   customers = JSON.parse(atob(data.content.replace(/\n/g, '')));
+}
+
+async function loadRunHistory() {
+  try {
+    const data = await ghFetch('/contents/run_history.json');
+    return JSON.parse(atob(data.content.replace(/\n/g, '')));
+  } catch (e) { return []; }
+}
+
+function showRouteLinks(title, tripIds) {
+  const el = document.getElementById('modal-routes-list');
+  document.getElementById('modal-routes-title').textContent = title;
+  el.innerHTML = '';
+  if (!tripIds || !tripIds.length) {
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:13px">No route links available for this run.</p>';
+  } else {
+    tripIds.forEach(function(id) {
+      const a = document.createElement('a');
+      a.href = 'https://admin.mover.dk/dk/da/user-area/trips/session/' + id;
+      a.target = '_blank';
+      a.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#f8f9fa;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--navy);font-size:13px;font-weight:500;transition:background .12s';
+      a.onmouseover = function() { this.style.background = '#edf2f7'; };
+      a.onmouseout  = function() { this.style.background = '#f8f9fa'; };
+      a.innerHTML = '<span>Route #' + id + '</span><span style="color:var(--teal);font-size:12px">View selfie ↗</span>';
+      el.appendChild(a);
+    });
+  }
+  document.getElementById('modal-routes').style.display = 'flex';
 }
 
 async function loadTotalSelfies() {
@@ -439,7 +478,7 @@ async function renderCustomers() {
 async function renderRuns() {
   const el = document.getElementById('runs-list');
   try {
-    const actionsData = await ghFetch('/actions/runs?per_page=30');
+    const [actionsData, history] = await Promise.all([ghFetch('/actions/runs?per_page=30'), loadRunHistory()]);
     const botRuns = (actionsData.workflow_runs || []).filter(r => r.name === 'Mover Selfie Bot');
 
     if (!botRuns.length) {
@@ -480,6 +519,20 @@ async function renderRuns() {
         '<span class="run-badge ' + status + '">' + label + '</span>' +
         '<div class="run-time">' + timeStr + '</div>' +
         '<a href="' + run.html_url + '" target="_blank" style="color:var(--text-muted);font-size:13px;text-decoration:none;margin-left:4px">↗</a>';
+      // Match run to history entry by timestamp
+      const runTime   = new Date(run.created_at).getTime();
+      const histEntry = history.find(function(h) { return Math.abs(new Date(h.timestamp).getTime() - runTime) < 10 * 60 * 1000; });
+      if (histEntry && histEntry.trip_ids && histEntry.trip_ids.length) {
+        const routeBtn = document.createElement('button');
+        routeBtn.className = 'btn btn-outline light btn-sm';
+        routeBtn.style.marginLeft = '6px';
+        routeBtn.textContent = histEntry.trip_ids.length + ' routes';
+        routeBtn.addEventListener('click', function() {
+          const label = custLabel + ' — ' + offset + ' (' + timeStr + ')';
+          showRouteLinks(label, histEntry.trip_ids);
+        });
+        item.appendChild(routeBtn);
+      }
       el.appendChild(item);
     });
   } catch (e) { el.innerHTML = '<div class="empty">Could not load runs: ' + e.message + '</div>'; }
@@ -545,6 +598,8 @@ function openEditModal(i) {
 
 document.getElementById('btn-add-customer').addEventListener('click', openAddModal);
 document.getElementById('btn-modal-cancel').addEventListener('click', function() { document.getElementById('modal-add').style.display = 'none'; });
+document.getElementById('btn-routes-close').addEventListener('click', function() { document.getElementById('modal-routes').style.display = 'none'; });
+document.getElementById('modal-routes').addEventListener('click', function(e) { if (e.target === document.getElementById('modal-routes')) document.getElementById('modal-routes').style.display = 'none'; });
 document.getElementById('modal-add').addEventListener('click', function(e) { if (e.target === document.getElementById('modal-add')) document.getElementById('modal-add').style.display = 'none'; });
 
 document.getElementById('btn-modal-save').addEventListener('click', async function() {
