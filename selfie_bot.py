@@ -76,30 +76,69 @@ def login(email: str, password: str) -> requests.Session:
 # ── Get driver IDs ─────────────────────────────────────────────────────────────
 
 def get_driver_ids(session: requests.Session, customer_id: str, target_date: str) -> tuple:
-    trips_url = f"{BASE}/dk/da/user-area/users/{customer_id}/trips/"
-    resp = session.get(trips_url)
-    soup = BeautifulSoup(resp.text, "html.parser")
-
-    rows = soup.select("table tbody tr")
-    log(f"  Page has {len(rows)} total trip rows")
+    # Parse target date for comparison — trips are sorted newest first,
+    # so we stop paginating once we pass the target date
+    from datetime import datetime
+    target_dt = datetime.strptime(target_date, "%d-%m-%Y")
 
     see_more_links = []
-    for row in rows:
-        cells = row.find_all("td")
-        if len(cells) < 2:
-            continue
-        date_text = cells[1].get_text(strip=True).split()[0]
-        if date_text != target_date:
-            continue
-        for a in row.find_all("a", href=True):
-            text = a.get_text(strip=True).lower()
-            if "see" in text or "more" in text or "info" in text:
-                href = a["href"]
-                full = BASE + href if href.startswith("/") else href
-                if full not in see_more_links:
-                    see_more_links.append(full)
+    page_url = f"{BASE}/dk/da/user-area/users/{customer_id}/trips/"
+    page_num = 1
 
-    log(f"  Found {len(see_more_links)} trip(s) for {target_date}")
+    while page_url:
+        log(f"  Fetching trips page {page_num}: {page_url}")
+        resp = session.get(page_url)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        rows = soup.select("table tbody tr")
+        log(f"  Page {page_num} has {len(rows)} rows")
+
+        found_older = False
+        for row in rows:
+            cells = row.find_all("td")
+            if len(cells) < 2:
+                continue
+            date_text = cells[1].get_text(strip=True).split()[0]
+
+            # Parse this row's date
+            try:
+                row_dt = datetime.strptime(date_text, "%d-%m-%Y")
+            except ValueError:
+                continue
+
+            # Trips are newest-first — if this row is older than target, stop paging
+            if row_dt < target_dt:
+                found_older = True
+
+            if date_text == target_date:
+                for a in row.find_all("a", href=True):
+                    text = a.get_text(strip=True).lower()
+                    if "see" in text or "more" in text or "info" in text:
+                        href = a["href"]
+                        full = BASE + href if href.startswith("/") else href
+                        if full not in see_more_links:
+                            see_more_links.append(full)
+
+        # If we've seen rows older than our target, no need to go further back
+        if found_older:
+            log(f"  Passed target date on page {page_num} — stopping pagination")
+            break
+
+        # Find the "older trips" pagination link (Ældre ture >)
+        next_link = None
+        for a in soup.find_all("a", href=True):
+            text = a.get_text(strip=True).lower()
+            if "ældre" in text or "older" in text or "next" in text:
+                href = a["href"]
+                next_link = BASE + href if href.startswith("/") else href
+                break
+
+        if next_link and next_link != page_url:
+            page_url = next_link
+            page_num += 1
+        else:
+            break  # No more pages
+
+    log(f"  Found {len(see_more_links)} trip(s) for {target_date} across {page_num} page(s)")
 
     driver_ids = set()
     for url in see_more_links:
