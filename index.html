@@ -117,7 +117,7 @@
   .help-link { font-size: 12px; color: var(--teal); margin-bottom: 20px; display: block; }
 
   /* Stats */
-  .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+  .stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 32px; }
   .stat-card {
     background: #fff; border: 1px solid var(--border);
     border-radius: var(--radius-sm); padding: 20px 24px; box-shadow: var(--shadow);
@@ -282,6 +282,10 @@
         <div class="stat-label">Last Run</div>
         <div class="stat-value" id="stat-last-run" style="font-size:16px;padding-top:5px">—</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Selfies Activated</div>
+        <div class="stat-value teal" id="stat-total-selfies">—</div>
+      </div>
     </div>
 
     <div class="section-header">
@@ -365,6 +369,17 @@ async function loadCustomers() {
   customers = JSON.parse(atob(data.content.replace(/\n/g, '')));
 }
 
+async function loadTotalSelfies() {
+  try {
+    const data = await ghFetch('/contents/run_history.json');
+    const history = JSON.parse(atob(data.content.replace(/\n/g, '')));
+    const total = history.reduce(function(sum, r) { return sum + (r.total_enabled || 0); }, 0);
+    document.getElementById('stat-total-selfies').textContent = total.toLocaleString();
+  } catch (e) {
+    document.getElementById('stat-total-selfies').textContent = '—';
+  }
+}
+
 async function persistCustomers() {
   try {
     const fresh = await ghFetch('/contents/customers.json');
@@ -388,21 +403,8 @@ async function renderCustomers() {
     return;
   }
 
-  const runStats = await getRunStats();
-
   el.innerHTML = '';
   customers.forEach(function(c, i) {
-    const custStat   = runStats[c.id] || { count: 0, lastRun: null };
-    const allStat    = runStats.__all__ || { count: 0, lastRun: null };
-    // Total = specific runs for this customer + all-customer runs (both affect this customer)
-    const totalCount = custStat.count + allStat.count;
-    // Last run = most recent of either specific or all-customer run
-    const dates      = [custStat.lastRun, allStat.lastRun].filter(Boolean).sort().reverse();
-    const lastRun    = dates[0] || null;
-    const lastRunStr = lastRun
-      ? new Date(lastRun).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' +
-        new Date(lastRun).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-      : 'Never';
 
     const row = document.createElement('div');
     row.className = 'customer-row';
@@ -497,6 +499,7 @@ async function runCustomer(customer, offset) {
     toast('Run triggered for ' + customer.name);
     setTimeout(renderRuns, 4000);
     setTimeout(renderCustomers, 8000);
+    setTimeout(loadTotalSelfies, 15000);
   } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, '✗'); }
 }
 
@@ -579,6 +582,7 @@ function showApp() {
   document.getElementById('status-text').textContent = CONFIG.owner + '/' + CONFIG.repo;
   loadCustomers().then(function() { renderCustomers(); });
   renderRuns();
+  loadTotalSelfies();
 }
 
 document.getElementById('btn-logout').addEventListener('click', function() { localStorage.removeItem('selfiebot_config'); location.reload(); });
