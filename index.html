@@ -378,9 +378,11 @@ async function getRunStats() {
   try {
     const data = await ghFetch('/actions/runs?per_page=100&event=workflow_dispatch');
     const runs = (data.workflow_runs || []).filter(r => r.name === 'Mover Selfie Bot' && r.conclusion === 'success');
-    const stats = {};
+    // Only count runs where a specific customer_id was provided
+    const stats = { __total__: { count: runs.length, lastRun: runs[0] ? runs[0].created_at : null } };
     for (const run of runs) {
-      const id = (run.inputs && run.inputs.customer_id) ? run.inputs.customer_id : '__all__';
+      if (!run.inputs || !run.inputs.customer_id) continue; // skip "all customers" runs
+      const id = run.inputs.customer_id;
       if (!stats[id]) stats[id] = { count: 0, lastRun: null };
       stats[id].count++;
       if (!stats[id].lastRun || run.created_at > stats[id].lastRun) stats[id].lastRun = run.created_at;
@@ -402,12 +404,10 @@ async function renderCustomers() {
 
   el.innerHTML = '';
   customers.forEach(function(c, i) {
-    const perCustomer = runStats[c.id] || { count: 0, lastRun: null };
-    const allRuns     = runStats['__all__'] || { count: 0, lastRun: null };
-    const totalCount  = perCustomer.count + allRuns.count;
-    const dates       = [perCustomer.lastRun, allRuns.lastRun].filter(Boolean).sort().reverse();
-    const lastRun     = dates[0];
-    const lastRunStr  = lastRun
+    const custStat   = runStats[c.id] || { count: 0, lastRun: null };
+    const totalCount = custStat.count;
+    const lastRun    = custStat.lastRun;
+    const lastRunStr = lastRun
       ? new Date(lastRun).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' +
         new Date(lastRun).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
       : 'Never';
