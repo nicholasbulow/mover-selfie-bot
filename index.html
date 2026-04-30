@@ -455,35 +455,22 @@ async function renderCustomers() {
   });
 }
 
-// Fetch enabled count from job log
-async function fetchEnabledCount(runId) {
+// Load run history from run_history.json in repo
+async function loadRunHistory() {
   try {
-    const jobs = await ghFetch('/actions/runs/' + runId + '/jobs');
-    const job  = (jobs.jobs || [])[0];
-    if (!job) return null;
-
-    // Fetch the raw log text
-    const logResp = await fetch('https://api.github.com/repos/' + CONFIG.owner + '/' + CONFIG.repo + '/actions/jobs/' + job.id + '/logs', {
-      headers: { 'Authorization': 'token ' + CONFIG.token, 'Accept': 'application/vnd.github.v3+json' }
-    });
-    if (!logResp.ok) return null;
-    const logText = await logResp.text();
-
-    // Parse the summary line e.g. "✅ Enabled  : 14"
-    const match = logText.match(/Enabled\s*[:\-]\s*(\d+)/);
-    if (match) return parseInt(match[1], 10);
-
-    // Fallback: count individual "enabled" lines
-    const lines = logText.match(/selfie enabled/g);
-    return lines ? lines.length : null;
-  } catch (e) { return null; }
+    const data = await ghFetch('/contents/run_history.json');
+    return JSON.parse(atob(data.content.replace(/\n/g, '')));
+  } catch (e) { return []; }
 }
 
 async function renderRuns() {
   const el = document.getElementById('runs-list');
   try {
-    const data = await ghFetch('/actions/runs?per_page=30');
-    const botRuns = (data.workflow_runs || []).filter(r => r.name === 'Mover Selfie Bot');
+    const [actionsData, history] = await Promise.all([
+      ghFetch('/actions/runs?per_page=30'),
+      loadRunHistory()
+    ]);
+    const botRuns = (actionsData.workflow_runs || []).filter(r => r.name === 'Mover Selfie Bot');
 
     if (!botRuns.length) {
       el.innerHTML = '<div class="empty"><div class="empty-icon">⏱</div>No runs yet.</div>';
@@ -499,9 +486,7 @@ async function renderRuns() {
     }
 
     el.innerHTML = '';
-    const recentRuns = botRuns.slice(0, 8);
-
-    recentRuns.forEach(function(run) {
+    botRuns.slice(0, 8).forEach(function(run) {
       const rawStatus = run.status === 'completed' ? run.conclusion : run.status;
       const status    = { success: 'success', failure: 'failure', in_progress: 'in_progress', queued: 'queued' }[rawStatus] || 'queued';
       const label     = { success: 'Done', failure: 'Failed', in_progress: 'Running...', queued: 'Queued' }[status];
@@ -515,33 +500,25 @@ async function renderRuns() {
       const custLabel = cust ? cust.name : (custId ? custId : 'All customers');
       const offset    = run.inputs && run.inputs.offset === '1' ? 'Tomorrow' : 'Today';
 
+      // Match this run to history by timestamp (within 5 minutes)
+      const runTime    = new Date(run.created_at).getTime();
+      const histEntry  = history.find(function(h) {
+        return Math.abs(new Date(h.timestamp).getTime() - runTime) < 5 * 60 * 1000;
+      });
+      const enabledCount = histEntry ? histEntry.total_enabled : null;
+
       const item = document.createElement('div');
       item.className = 'run-item';
-      item.setAttribute('data-run-id', run.id);
       item.innerHTML =
         '<div class="run-dot ' + status + '"></div>' +
         '<div class="run-label">' + custLabel + ' &mdash; ' + offset + '</div>' +
-        '<span class="run-count" style="font-size:12px;color:var(--text-muted);min-width:80px;text-align:right">' +
-          (status === 'success' ? '<span style="color:#aaa">...</span>' : '') +
-        '</span>' +
+        (status === 'success' && enabledCount !== null
+          ? '<span style="font-size:12px;color:var(--teal);font-weight:600;min-width:80px;text-align:right">' + enabledCount + ' enabled</span>'
+          : '<span style="min-width:80px"></span>') +
         '<span class="run-badge ' + status + '">' + label + '</span>' +
         '<div class="run-time">' + timeStr + '</div>' +
         '<a href="' + run.html_url + '" target="_blank" style="color:var(--text-muted);font-size:13px;text-decoration:none;margin-left:4px">↗</a>';
       el.appendChild(item);
-
-      // Async: fetch enabled count for successful runs
-      if (status === 'success') {
-        fetchEnabledCount(run.id).then(function(count) {
-          const countEl = item.querySelector('.run-count');
-          if (countEl) {
-            if (count !== null) {
-              countEl.innerHTML = '<span style="color:var(--teal);font-weight:600">' + count + ' enabled</span>';
-            } else {
-              countEl.innerHTML = '';
-            }
-          }
-        });
-      }
     });
   } catch (e) { el.innerHTML = '<div class="empty">Could not load runs: ' + e.message + '</div>'; }
 }
