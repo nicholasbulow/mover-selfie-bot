@@ -495,7 +495,7 @@ async function renderRuns() {
     }
 
     el.innerHTML = '';
-    botRuns.slice(0, 8).forEach(function(run) {
+    botRuns.slice(0, 8).forEach(function(run, idx) {
       const rawStatus = run.status === 'completed' ? run.conclusion : run.status;
       const status    = { success: 'success', failure: 'failure', in_progress: 'in_progress', queued: 'queued' }[rawStatus] || 'queued';
       const label     = { success: 'Done', failure: 'Failed', in_progress: 'Running...', queued: 'Queued' }[status];
@@ -519,9 +519,8 @@ async function renderRuns() {
         '<span class="run-badge ' + status + '">' + label + '</span>' +
         '<div class="run-time">' + timeStr + '</div>' +
         '<a href="' + run.html_url + '" target="_blank" style="color:var(--text-muted);font-size:13px;text-decoration:none;margin-left:4px">↗</a>';
-      // Match run to history entry by timestamp
-      const runTime   = new Date(run.created_at).getTime();
-      const histEntry = history.find(function(h) { return Math.abs(new Date(h.timestamp).getTime() - runTime) < 10 * 60 * 1000; });
+      // Match by index - history is newest-first, same as botRuns
+      const histEntry = history[idx] || null;
       if (histEntry && histEntry.trip_ids && histEntry.trip_ids.length) {
         const routeBtn = document.createElement('button');
         routeBtn.className = 'btn btn-outline light btn-sm';
