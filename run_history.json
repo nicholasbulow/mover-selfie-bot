@@ -1,0 +1,17 @@
+[
+  {
+    "timestamp": "2026-04-30T12:34:59",
+    "offset": 0,
+    "customers": [
+      {
+        "id": "1778321",
+        "name": "IKEA BE Co-pilot",
+        "enabled": 7,
+        "already_on": 0,
+        "failed": 0
+      }
+    ],
+    "total_enabled": 7,
+    "total_already_on": 0
+  }
+]
