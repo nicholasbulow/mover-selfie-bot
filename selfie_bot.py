@@ -298,7 +298,7 @@ def save_run_history(results):
         all_trip_ids.extend(c.get("trip_ids", []))
 
     existing.insert(0, {
-        "timestamp": datetime.today().strftime("%Y-%m-%dT%H:%M:%S"),
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
         "offset":    results.get("offset", 0),
         "customers": results.get("customers", []),
         "total_enabled": results.get("total_enabled", 0),
