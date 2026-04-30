@@ -153,7 +153,7 @@ def get_driver_ids(session: requests.Session, customer_id: str, target_date: str
         except Exception as e:
             log(f"  ⚠️  Route page error: {e}")
 
-    return list(driver_ids), len(see_more_links)
+    return list(driver_ids), len(see_more_links), see_more_links
 
 # ── Enable selfie ──────────────────────────────────────────────────────────────
 
@@ -248,7 +248,7 @@ def run_customer(session: requests.Session, customer: dict, date_offset: int):
 
     log(f"\n── {customer['name']} ({customer['id']}) — {target_str} ({label})")
 
-    driver_ids, trip_count = get_driver_ids(session, customer["id"], target_str)
+    driver_ids, trip_count, route_links = get_driver_ids(session, customer["id"], target_str)
 
     if not trip_count:
         log(f"  ⚠️  No trips found for {target_str}")
@@ -267,7 +267,14 @@ def run_customer(session: requests.Session, customer: dict, date_offset: int):
         else:                        log(f"  ❌ Driver {did}: {result}");    failed += 1
 
     log(f"  ── ✅ {enabled}  ⏭️  {alreadyon}  ❌ {failed}")
-    return {"id": customer["id"], "name": customer["name"], "enabled": enabled, "already_on": alreadyon, "failed": failed}
+    # Extract trip IDs from route URLs for the dashboard
+    trip_ids = []
+    import re as _re
+    for url in route_links:
+        m = _re.search(r"/trips/session/(\d+)", url)
+        if m:
+            trip_ids.append(m.group(1))
+    return {"id": customer["id"], "name": customer["name"], "enabled": enabled, "already_on": alreadyon, "failed": failed, "trip_ids": trip_ids}
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
@@ -285,12 +292,18 @@ def save_run_history(results):
     except Exception:
         existing = []
 
+    # Collect all trip IDs across all customers
+    all_trip_ids = []
+    for c in results.get("customers", []):
+        all_trip_ids.extend(c.get("trip_ids", []))
+
     existing.insert(0, {
         "timestamp": datetime.today().strftime("%Y-%m-%dT%H:%M:%S"),
         "offset":    results.get("offset", 0),
         "customers": results.get("customers", []),
         "total_enabled": results.get("total_enabled", 0),
         "total_already_on": results.get("total_already_on", 0),
+        "trip_ids": list(dict.fromkeys(all_trip_ids)),  # deduplicated
     })
     # Keep last 50 runs
     existing = existing[:50]
