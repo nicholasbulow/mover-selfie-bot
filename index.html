@@ -153,9 +153,7 @@
   .customer-info { flex: 1; min-width: 0; }
   .customer-name { font-weight: 600; font-size: 14px; color: var(--navy); }
   .customer-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-  .customer-stats { text-align: right; min-width: 120px; }
-  .customer-stat-line { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
-  .customer-stat-line strong { color: var(--navy); font-weight: 600; }
+
   .customer-actions { display: flex; gap: 6px; align-items: center; }
 
   .empty { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px; }
@@ -379,28 +377,7 @@ async function persistCustomers() {
   } catch (e) { toast('Save failed: ' + e.message, '✗'); }
 }
 
-async function getRunStats() {
-  try {
-    const data = await ghFetch('/actions/runs?per_page=100&event=workflow_dispatch');
-    const runs = (data.workflow_runs || []).filter(r => r.name === 'Mover Selfie Bot' && r.conclusion === 'success');
-    // Track per-customer runs AND all-customer runs
-    const stats = {};
-    for (const run of runs) {
-      const custId = (run.inputs && run.inputs.customer_id) ? run.inputs.customer_id : null;
-      // Add to specific customer if targeted
-      if (custId) {
-        if (!stats[custId]) stats[custId] = { count: 0, lastRun: null };
-        stats[custId].count++;
-        if (!stats[custId].lastRun || run.created_at > stats[custId].lastRun) stats[custId].lastRun = run.created_at;
-      }
-      // Always add to __all__ (tracks total runs regardless)
-      if (!stats.__all__) stats.__all__ = { count: 0, lastRun: null };
-      stats.__all__.count++;
-      if (!stats.__all__.lastRun || run.created_at > stats.__all__.lastRun) stats.__all__.lastRun = run.created_at;
-    }
-    return stats;
-  } catch (e) { return {}; }
-}
+
 
 async function renderCustomers() {
   const el = document.getElementById('customer-list');
@@ -435,10 +412,7 @@ async function renderCustomers() {
         '<div class="customer-name">' + c.name + '</div>' +
         '<div class="customer-meta">ID: ' + c.id + '</div>' +
       '</div>' +
-      '<div class="customer-stats">' +
-        '<div class="customer-stat-line"><strong>' + totalCount + '</strong> successful runs</div>' +
-        '<div class="customer-stat-line">Last: ' + lastRunStr + '</div>' +
-      '</div>' +
+      
       '<div class="customer-actions">' +
         '<button class="btn btn-primary btn-sm" data-run-today="' + i + '">Today</button>' +
         '<button class="btn btn-outline light btn-sm" data-run-tomorrow="' + i + '">Tomorrow</button>' +
@@ -460,21 +434,10 @@ async function renderCustomers() {
   });
 }
 
-// Load run history from run_history.json in repo
-async function loadRunHistory() {
-  try {
-    const data = await ghFetch('/contents/run_history.json');
-    return JSON.parse(atob(data.content.replace(/\n/g, '')));
-  } catch (e) { return []; }
-}
-
 async function renderRuns() {
   const el = document.getElementById('runs-list');
   try {
-    const [actionsData, history] = await Promise.all([
-      ghFetch('/actions/runs?per_page=30'),
-      loadRunHistory()
-    ]);
+    const actionsData = await ghFetch('/actions/runs?per_page=30');
     const botRuns = (actionsData.workflow_runs || []).filter(r => r.name === 'Mover Selfie Bot');
 
     if (!botRuns.length) {
@@ -505,21 +468,13 @@ async function renderRuns() {
       const custLabel = cust ? cust.name : (custId ? custId : 'All customers');
       const offset    = run.inputs && run.inputs.offset === '1' ? 'Tomorrow' : 'Today';
 
-      // Match this run to history by timestamp (within 5 minutes)
-      const runTime    = new Date(run.created_at).getTime();
-      const histEntry  = history.find(function(h) {
-        return Math.abs(new Date(h.timestamp).getTime() - runTime) < 5 * 60 * 1000;
-      });
-      const enabledCount = histEntry ? histEntry.total_enabled : null;
 
       const item = document.createElement('div');
       item.className = 'run-item';
       item.innerHTML =
         '<div class="run-dot ' + status + '"></div>' +
         '<div class="run-label">' + custLabel + ' &mdash; ' + offset + '</div>' +
-        (status === 'success' && enabledCount !== null
-          ? '<span style="font-size:12px;color:var(--teal);font-weight:600;min-width:80px;text-align:right">' + enabledCount + ' enabled</span>'
-          : '<span style="min-width:80px"></span>') +
+
         '<span class="run-badge ' + status + '">' + label + '</span>' +
         '<div class="run-time">' + timeStr + '</div>' +
         '<a href="' + run.html_url + '" target="_blank" style="color:var(--text-muted);font-size:13px;text-decoration:none;margin-left:4px">↗</a>';
