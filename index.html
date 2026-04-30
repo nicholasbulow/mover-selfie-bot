@@ -378,14 +378,20 @@ async function getRunStats() {
   try {
     const data = await ghFetch('/actions/runs?per_page=100&event=workflow_dispatch');
     const runs = (data.workflow_runs || []).filter(r => r.name === 'Mover Selfie Bot' && r.conclusion === 'success');
-    // Only count runs where a specific customer_id was provided
-    const stats = { __total__: { count: runs.length, lastRun: runs[0] ? runs[0].created_at : null } };
+    // Track per-customer runs AND all-customer runs
+    const stats = {};
     for (const run of runs) {
-      if (!run.inputs || !run.inputs.customer_id) continue; // skip "all customers" runs
-      const id = run.inputs.customer_id;
-      if (!stats[id]) stats[id] = { count: 0, lastRun: null };
-      stats[id].count++;
-      if (!stats[id].lastRun || run.created_at > stats[id].lastRun) stats[id].lastRun = run.created_at;
+      const custId = (run.inputs && run.inputs.customer_id) ? run.inputs.customer_id : null;
+      // Add to specific customer if targeted
+      if (custId) {
+        if (!stats[custId]) stats[custId] = { count: 0, lastRun: null };
+        stats[custId].count++;
+        if (!stats[custId].lastRun || run.created_at > stats[custId].lastRun) stats[custId].lastRun = run.created_at;
+      }
+      // Always add to __all__ (tracks total runs regardless)
+      if (!stats.__all__) stats.__all__ = { count: 0, lastRun: null };
+      stats.__all__.count++;
+      if (!stats.__all__.lastRun || run.created_at > stats.__all__.lastRun) stats.__all__.lastRun = run.created_at;
     }
     return stats;
   } catch (e) { return {}; }
@@ -405,8 +411,12 @@ async function renderCustomers() {
   el.innerHTML = '';
   customers.forEach(function(c, i) {
     const custStat   = runStats[c.id] || { count: 0, lastRun: null };
-    const totalCount = custStat.count;
-    const lastRun    = custStat.lastRun;
+    const allStat    = runStats.__all__ || { count: 0, lastRun: null };
+    // Total = specific runs for this customer + all-customer runs (both affect this customer)
+    const totalCount = custStat.count + allStat.count;
+    // Last run = most recent of either specific or all-customer run
+    const dates      = [custStat.lastRun, allStat.lastRun].filter(Boolean).sort().reverse();
+    const lastRun    = dates[0] || null;
     const lastRunStr = lastRun
       ? new Date(lastRun).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' +
         new Date(lastRun).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
@@ -445,6 +455,30 @@ async function renderCustomers() {
   });
 }
 
+// Fetch enabled count from job log
+async function fetchEnabledCount(runId) {
+  try {
+    const jobs = await ghFetch('/actions/runs/' + runId + '/jobs');
+    const job  = (jobs.jobs || [])[0];
+    if (!job) return null;
+
+    // Fetch the raw log text
+    const logResp = await fetch('https://api.github.com/repos/' + CONFIG.owner + '/' + CONFIG.repo + '/actions/jobs/' + job.id + '/logs', {
+      headers: { 'Authorization': 'token ' + CONFIG.token, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if (!logResp.ok) return null;
+    const logText = await logResp.text();
+
+    // Parse the summary line e.g. "✅ Enabled  : 14"
+    const match = logText.match(/Enabled\s*[:\-]\s*(\d+)/);
+    if (match) return parseInt(match[1], 10);
+
+    // Fallback: count individual "enabled" lines
+    const lines = logText.match(/selfie enabled/g);
+    return lines ? lines.length : null;
+  } catch (e) { return null; }
+}
+
 async function renderRuns() {
   const el = document.getElementById('runs-list');
   try {
@@ -465,7 +499,9 @@ async function renderRuns() {
     }
 
     el.innerHTML = '';
-    botRuns.slice(0, 8).forEach(function(run) {
+    const recentRuns = botRuns.slice(0, 8);
+
+    recentRuns.forEach(function(run) {
       const rawStatus = run.status === 'completed' ? run.conclusion : run.status;
       const status    = { success: 'success', failure: 'failure', in_progress: 'in_progress', queued: 'queued' }[rawStatus] || 'queued';
       const label     = { success: 'Done', failure: 'Failed', in_progress: 'Running...', queued: 'Queued' }[status];
@@ -481,13 +517,31 @@ async function renderRuns() {
 
       const item = document.createElement('div');
       item.className = 'run-item';
+      item.setAttribute('data-run-id', run.id);
       item.innerHTML =
         '<div class="run-dot ' + status + '"></div>' +
         '<div class="run-label">' + custLabel + ' &mdash; ' + offset + '</div>' +
+        '<span class="run-count" style="font-size:12px;color:var(--text-muted);min-width:80px;text-align:right">' +
+          (status === 'success' ? '<span style="color:#aaa">...</span>' : '') +
+        '</span>' +
         '<span class="run-badge ' + status + '">' + label + '</span>' +
         '<div class="run-time">' + timeStr + '</div>' +
         '<a href="' + run.html_url + '" target="_blank" style="color:var(--text-muted);font-size:13px;text-decoration:none;margin-left:4px">↗</a>';
       el.appendChild(item);
+
+      // Async: fetch enabled count for successful runs
+      if (status === 'success') {
+        fetchEnabledCount(run.id).then(function(count) {
+          const countEl = item.querySelector('.run-count');
+          if (countEl) {
+            if (count !== null) {
+              countEl.innerHTML = '<span style="color:var(--teal);font-weight:600">' + count + ' enabled</span>';
+            } else {
+              countEl.innerHTML = '';
+            }
+          }
+        });
+      }
     });
   } catch (e) { el.innerHTML = '<div class="empty">Could not load runs: ' + e.message + '</div>'; }
 }
