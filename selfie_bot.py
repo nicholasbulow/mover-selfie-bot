@@ -7,7 +7,7 @@ import sys
 import json
 import re
 import argparse
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 import requests
 from bs4 import BeautifulSoup
@@ -267,8 +267,48 @@ def run_customer(session: requests.Session, customer: dict, date_offset: int):
         else:                        log(f"  ❌ Driver {did}: {result}");    failed += 1
 
     log(f"  ── ✅ {enabled}  ⏭️  {alreadyon}  ❌ {failed}")
+    return {"id": customer["id"], "name": customer["name"], "enabled": enabled, "already_on": alreadyon, "failed": failed}
 
 # ── Main ───────────────────────────────────────────────────────────────────────
+
+def save_run_history(results):
+    """Save run summary to run_history.json in the repo via git."""
+    import subprocess, tempfile, os
+    if not results:
+        return
+    history_path = os.path.join(os.path.dirname(__file__), "run_history.json")
+    try:
+        existing = []
+        if os.path.exists(history_path):
+            with open(history_path) as f:
+                existing = json.load(f)
+    except Exception:
+        existing = []
+
+    existing.insert(0, {
+        "timestamp": datetime.today().strftime("%Y-%m-%dT%H:%M:%S"),
+        "offset":    results.get("offset", 0),
+        "customers": results.get("customers", []),
+        "total_enabled": results.get("total_enabled", 0),
+        "total_already_on": results.get("total_already_on", 0),
+    })
+    # Keep last 50 runs
+    existing = existing[:50]
+
+    with open(history_path, "w") as f:
+        json.dump(existing, f, indent=2)
+
+    # Commit and push via git (available in GitHub Actions)
+    try:
+        subprocess.run(["git", "config", "user.email", "selfiebot@mover.dk"], check=True)
+        subprocess.run(["git", "config", "user.name", "Selfie Bot"], check=True)
+        subprocess.run(["git", "add", history_path], check=True)
+        subprocess.run(["git", "commit", "-m", "Update run history"], check=True)
+        subprocess.run(["git", "push"], check=True)
+        log("✅ Run history saved")
+    except Exception as e:
+        log(f"⚠️  Could not save run history: {e}")
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -301,10 +341,16 @@ def main():
 
     session = login(email, password)
 
+    run_results = {"offset": args.offset, "customers": [], "total_enabled": 0, "total_already_on": 0}
     for customer in active:
-        run_customer(session, customer, args.offset)
+        result = run_customer(session, customer, args.offset)
+        if result:
+            run_results["customers"].append(result)
+            run_results["total_enabled"]    += result["enabled"]
+            run_results["total_already_on"] += result["already_on"]
 
     log("\n══ All done ══════════════════════")
+    save_run_history(run_results)
 
 if __name__ == "__main__":
     main()
