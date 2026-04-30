@@ -33,11 +33,11 @@
   {
     "id": "1778321",
     "name": "IKEA BE Co-pilot",
-    "enabled": true
+    "enabled": false
   },
   {
     "id": "2271913",
     "name": "IKEA NO Co-pilot",
-    "enabled": false
+    "enabled": true
   }
 ]
