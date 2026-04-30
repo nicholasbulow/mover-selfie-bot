@@ -16,7 +16,8 @@
     --teal: #3dbfa0;
     --teal-dark: #2fa088;
     --teal-dim: #edfaf6;
-    --navy: #1c2b3a;
+    --navy: #0a3d5c;
+    --navy-light: #0d4f74;
     --red: #e05252;
     --red-dim: #fdf2f2;
     --yellow: #f5a623;
@@ -38,8 +39,8 @@
   }
 
   .topbar {
-    background: #fff;
-    border-bottom: 1px solid var(--border);
+    background: var(--navy);
+    border-bottom: none;
     padding: 0 40px;
     height: 60px;
     display: flex;
@@ -48,6 +49,7 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    box-shadow: 0 2px 12px rgba(10,61,92,0.25);
   }
 
   .logo {
@@ -56,7 +58,7 @@
     gap: 10px;
     font-weight: 700;
     font-size: 15px;
-    color: var(--navy);
+    color: #fff;
   }
 
   .logo-dot {
@@ -67,7 +69,7 @@
   }
 
   .topbar-right { display: flex; align-items: center; gap: 16px; }
-  #status-text { font-size: 12px; color: var(--text-muted); }
+  #status-text { font-size: 12px; color: rgba(255,255,255,0.65); }
 
   .main { max-width: 820px; margin: 0 auto; padding: 40px 24px; }
 
@@ -81,8 +83,10 @@
   .btn:disabled { opacity: .4; cursor: not-allowed; }
   .btn-primary  { background: var(--teal); color: #fff; }
   .btn-primary:hover:not(:disabled) { background: var(--teal-dark); }
-  .btn-outline  { background: #fff; color: var(--text); border: 1.5px solid var(--border); }
-  .btn-outline:hover:not(:disabled) { border-color: var(--teal); color: var(--teal); }
+  .btn-outline  { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.5); }
+  .btn-outline:hover:not(:disabled) { border-color: #fff; color: #fff; background: rgba(255,255,255,0.1); }
+  .btn-outline.light { background: #fff; color: var(--navy); border: 1.5px solid var(--border); }
+  .btn-outline.light:hover:not(:disabled) { border-color: var(--navy); color: var(--navy); }
   .btn-ghost    { background: transparent; color: var(--text-muted); border: none; }
   .btn-ghost:hover:not(:disabled) { color: var(--text); }
   .btn-danger   { background: var(--red-dim); color: var(--red); border: none; }
@@ -124,7 +128,7 @@
 
   /* Section */
   .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .section-title { font-weight: 700; font-size: 15px; color: var(--navy); }
+  .section-title { font-weight: 700; font-size: 15px; color: var(--navy); letter-spacing: -0.2px; }
 
   .run-bar { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
 
@@ -238,13 +242,14 @@
 
 <div class="topbar">
   <div class="logo">
-    <span style="font-size:20px">📸</span>
-    Selfie Bot
-    <div class="logo-dot" id="logo-dot"></div>
+      <img src="https://mover-static.azurewebsites.net/Mover/v2/Images/Logo/logo.png" alt="Mover" style="height:22px;filter:brightness(0) invert(1);opacity:0.95">
+      <span style="color:rgba(255,255,255,0.3);font-weight:300;font-size:18px;margin:0 6px">|</span>
+      <span style="color:rgba(255,255,255,0.9);font-weight:500;font-size:13px;letter-spacing:0.3px">Selfie Bot</span>
+      <div class="logo-dot" id="logo-dot"></div>
   </div>
   <div class="topbar-right">
     <span id="status-text">Not connected</span>
-    <button class="btn btn-ghost btn-sm" id="btn-logout" style="display:none">Log out</button>
+    <button class="btn btn-ghost btn-sm" id="btn-logout" style="display:none;color:rgba(255,255,255,0.75);font-size:12px">Log out</button>
   </div>
 </div>
 
@@ -286,7 +291,7 @@
     </div>
     <div class="run-bar">
       <button class="btn btn-primary" id="btn-run-today">▶ Enable selfies — Today</button>
-      <button class="btn btn-outline" id="btn-run-tomorrow">▶ Enable selfies — Tomorrow</button>
+      <button class="btn btn-outline light" id="btn-run-tomorrow">▶ Enable selfies — Tomorrow</button>
       <button class="btn btn-ghost btn-sm" id="btn-refresh-runs" style="margin-left:auto;font-size:13px">↻ Refresh</button>
     </div>
 
@@ -436,7 +441,7 @@ async function renderCustomers() {
       '</div>' +
       '<div class="customer-actions">' +
         '<button class="btn btn-primary btn-sm" data-run-today="' + i + '">Today</button>' +
-        '<button class="btn btn-outline btn-sm" data-run-tomorrow="' + i + '">Tomorrow</button>' +
+        '<button class="btn btn-outline light btn-sm" data-run-tomorrow="' + i + '">Tomorrow</button>' +
         '<button class="btn btn-ghost btn-sm" data-edit="' + i + '" style="padding:6px 10px;font-size:14px">✏️</button>' +
         '<button class="btn btn-danger btn-sm" data-del="' + i + '">✕</button>' +
       '</div>';
