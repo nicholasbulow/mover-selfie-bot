@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Selfie Bot â Mover</title>
+<title>Selfie Bot - Mover</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -509,12 +509,18 @@ async function renderRuns() {
       const cust      = custId ? customers.find(function(c) { return c.id === custId; }) : null;
       const offset    = run.inputs && run.inputs.offset === '1' ? 'Tomorrow' : 'Today';
       // Declare histEntry here so it's available for custLabel
-      const histEntry = history[idx] || null;
+      const runTime = new Date(run.created_at).getTime();
+      const histEntry = history.find(function(h) {
+        const diff = Math.abs(new Date(h.timestamp).getTime() - runTime);
+        return diff < 15 * 60 * 1000;
+      }) || null;
       // Show customer names from history if available, else fallback
       let custLabel;
-      if (cust) {
+      if (histEntry && histEntry.customers && histEntry.customers.length === 1) {
+        custLabel = histEntry.customers[0].name;
+      } else if (cust) {
         custLabel = cust.name;
-      } else if (histEntry && histEntry.customers && histEntry.customers.length) {
+      } else if (histEntry && histEntry.customers && histEntry.customers.length > 1) {
         custLabel = histEntry.customers.map(function(c) { return c.name; }).join(', ');
       } else {
         custLabel = custId || 'All customers';
