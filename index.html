@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Selfie Bot â Mover</title>
+<title>Selfie Bot - Mover</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -253,10 +253,10 @@
 
 <div id="auth-screen" style="display:none">
   <div class="auth-screen">
-    <div class="auth-icon">ð</div>
+    <div class="auth-icon" style="font-size:22px">&#128273;</div>
     <h2>Connect to GitHub</h2>
     <p>This dashboard reads and updates your selfie bot config directly from your GitHub repo. You need a Personal Access Token with repo access.</p>
-    <a class="help-link" href="https://github.com/settings/tokens/new?scopes=repo&description=SelfieBot" target="_blank">â Create a token on GitHub (takes 30 seconds)</a>
+    <a class="help-link" href="https://github.com/settings/tokens/new?scopes=repo&description=SelfieBot" target="_blank">- Create a token on GitHub (takes 30 seconds)</a>
     <div class="auth-form">
       <label>GitHub Personal Access Token</label>
       <input type="password" id="inp-token" placeholder="ghp_xxxxxxxxxxxx">
@@ -276,15 +276,15 @@
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-label">Active Customers</div>
-        <div class="stat-value teal" id="stat-customers">â</div>
+        <div class="stat-value teal" id="stat-customers">-</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Last Run</div>
-        <div class="stat-value" id="stat-last-run" style="font-size:16px;padding-top:5px">â</div>
+        <div class="stat-value" id="stat-last-run" style="font-size:16px;padding-top:5px">-</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Total Selfies Activated</div>
-        <div class="stat-value teal" id="stat-total-selfies">â</div>
+        <div class="stat-value teal" id="stat-total-selfies">-</div>
       </div>
     </div>
 
@@ -304,14 +304,14 @@
       <button class="btn btn-outline light btn-sm" id="btn-add-customer">+ Add customer</button>
     </div>
     <div class="customer-list" id="customer-list">
-      <div class="empty"><div class="empty-icon">ð¢</div>No customers configured yet.</div>
+      <div class="empty"><div class="empty-icon"></div>No customers configured yet.</div>
     </div>
 
     <div class="section-header" style="margin-top:32px">
       <div class="section-title">Recent runs</div>
     </div>
     <div class="runs-list" id="runs-list">
-      <div class="empty"><div class="empty-icon">â±</div>No runs yet.</div>
+      <div class="empty"><div class="empty-icon">-</div>No runs yet.</div>
     </div>
 
   </div>
@@ -360,7 +360,7 @@ function saveConfig() { localStorage.setItem('selfiebot_config', JSON.stringify(
 function loadConfig() { const s = localStorage.getItem('selfiebot_config'); if (s) CONFIG = JSON.parse(s); }
 
 function toast(msg, icon) {
-  icon = icon || 'â';
+  icon = icon || '-
   const el = document.getElementById('toast');
   el.innerHTML = icon + '&nbsp;&nbsp;' + msg;
   el.classList.add('show');
@@ -402,7 +402,7 @@ function showRouteLinks(title, tripIds) {
       a.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#f8f9fa;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--navy);font-size:13px;font-weight:500;transition:background .12s';
       a.onmouseover = function() { this.style.background = '#edf2f7'; };
       a.onmouseout  = function() { this.style.background = '#f8f9fa'; };
-      a.innerHTML = '<span>Route #' + id + '</span><span style="color:var(--teal);font-size:12px">View selfie â</span>';
+      a.innerHTML = '<span>Route #' + id + '</span><span style="color:var(--teal);font-size:12px">View selfie &rarr;</span>';
       el.appendChild(a);
     });
   }
@@ -416,7 +416,7 @@ async function loadTotalSelfies() {
     const total = history.reduce(function(sum, r) { return sum + (r.total_enabled || 0); }, 0);
     document.getElementById('stat-total-selfies').textContent = total.toLocaleString();
   } catch (e) {
-    document.getElementById('stat-total-selfies').textContent = 'â';
+    document.getElementById('stat-total-selfies').textContent = '-
   }
 }
 
@@ -429,7 +429,7 @@ async function persistCustomers() {
     });
     toast('Saved');
     renderCustomers();
-  } catch (e) { toast('Save failed: ' + e.message, 'â'); }
+  } catch (e) { toast('Save failed: ' + e.message, '-; }
 }
 
 
@@ -439,7 +439,7 @@ async function renderCustomers() {
   document.getElementById('stat-customers').textContent = customers.filter(c => c.enabled !== false).length;
 
   if (!customers.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">ð¢</div>No customers yet. Click "+ Add customer" to get started.</div>';
+    el.innerHTML = '<div class="empty"><div class="empty-icon"></div>No customers yet. Click "+ Add customer" to get started.</div>';
     return;
   }
 
@@ -459,7 +459,7 @@ async function renderCustomers() {
         '<button class="btn btn-primary btn-sm" data-run-today="' + i + '">Today</button>' +
         '<button class="btn btn-outline light btn-sm" data-run-tomorrow="' + i + '">Tomorrow</button>' +
         '<button class="btn btn-ghost btn-sm" data-edit="' + i + '" style="padding:6px 10px">Edit</button>' +
-        '<button class="btn btn-danger btn-sm" data-del="' + i + '">â</button>' +
+        '<button class="btn btn-danger btn-sm" data-del="' + i + '">-</button>' +
       '</div>';
 
     row.querySelector('input[type=checkbox]').addEventListener('change', function(e) { customers[i].enabled = e.target.checked; persistCustomers(); });
@@ -483,7 +483,7 @@ async function renderRuns() {
     const botRuns = (actionsData.workflow_runs || []).filter(r => r.name === 'Mover Selfie Bot');
 
     if (!botRuns.length) {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">â±</div>No runs yet.</div>';
+      el.innerHTML = '<div class="empty"><div class="empty-icon">-</div>No runs yet.</div>';
       return;
     }
 
@@ -529,14 +529,14 @@ async function renderRuns() {
 
         '<span class="run-badge ' + status + '">' + label + '</span>' +
         '<div class="run-time">' + timeStr + '</div>' +
-        '<a href="' + run.html_url + '" target="_blank" style="color:var(--text-muted);font-size:13px;text-decoration:none;margin-left:4px">â</a>';
+        '<a href="' + run.html_url + '" target="_blank" style="color:var(--text-muted);font-size:13px;text-decoration:none;margin-left:4px">-</a>';
       if (histEntry && histEntry.trip_ids && histEntry.trip_ids.length) {
         const routeBtn = document.createElement('button');
         routeBtn.className = 'btn btn-outline light btn-sm';
         routeBtn.style.marginLeft = '6px';
         routeBtn.textContent = histEntry.trip_ids.length + ' routes';
         routeBtn.addEventListener('click', function() {
-          const label = custLabel + ' â ' + offset + ' (' + timeStr + ')';
+          const label = custLabel + ' - ' + offset + ' (' + timeStr + ')';
           showRouteLinks(label, histEntry.trip_ids);
         });
         item.appendChild(routeBtn);
@@ -550,7 +550,7 @@ async function runCustomer(customer, offset) {
   const label = offset === 0 ? 'Today' : 'Tomorrow';
   const logEl = document.getElementById('log-box');
   logEl.style.display = 'block';
-  logEl.textContent   = 'Triggering ' + customer.name + ' â ' + label + '...';
+  logEl.textContent   = 'Triggering ' + customer.name + ' - ' + label + '...';
   try {
     await ghFetch('/actions/workflows/selfie_bot.yml/dispatches', {
       method: 'POST',
@@ -561,14 +561,14 @@ async function runCustomer(customer, offset) {
     setTimeout(renderRuns, 4000);
     setTimeout(renderCustomers, 8000);
     setTimeout(loadTotalSelfies, 15000);
-  } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, 'â'); }
+  } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, '-; }
 }
 
 async function runAll(offset) {
   const label = offset === 0 ? 'Today' : 'Tomorrow';
   const logEl = document.getElementById('log-box');
   logEl.style.display = 'block';
-  logEl.textContent   = 'Triggering all customers â ' + label + '...';
+  logEl.textContent   = 'Triggering all customers - ' + label + '...';
   try {
     await ghFetch('/actions/workflows/selfie_bot.yml/dispatches', {
       method: 'POST',
@@ -578,7 +578,7 @@ async function runAll(offset) {
     toast('Run triggered for all customers');
     setTimeout(renderRuns, 4000);
     setTimeout(renderCustomers, 8000);
-  } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, 'â'); }
+  } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, '-; }
 }
 
 document.getElementById('btn-run-today').addEventListener('click', function() { runAll(0); });
@@ -617,10 +617,10 @@ document.getElementById('modal-add').addEventListener('click', function(e) { if 
 document.getElementById('btn-modal-save').addEventListener('click', async function() {
   const id   = document.getElementById('m-id').value.trim();
   const name = document.getElementById('m-name').value.trim() || id;
-  if (!id) { toast('Customer ID is required', 'â '); return; }
+  if (!id) { toast('Customer ID is required', '-'); return; }
   const customer = { id: id, name: name, enabled: editIndex >= 0 ? (customers[editIndex].enabled !== false) : true };
   if (editIndex >= 0) { customers[editIndex] = customer; }
-  else { if (customers.find(function(c) { return c.id === id; })) { toast('Customer ID already exists', 'â '); return; } customers.push(customer); }
+  else { if (customers.find(function(c) { return c.id === id; })) { toast('Customer ID already exists', '-'); return; } customers.push(customer); }
   document.getElementById('modal-add').style.display = 'none';
   await persistCustomers();
   toast(editIndex >= 0 ? 'Customer updated' : 'Customer added');
@@ -630,7 +630,7 @@ document.getElementById('btn-connect').addEventListener('click', async function(
   const token = document.getElementById('inp-token').value.trim();
   const owner = document.getElementById('inp-owner').value.trim();
   const repo  = document.getElementById('inp-repo').value.trim();
-  if (!token || !owner || !repo) { toast('Fill in all fields', 'â '); return; }
+  if (!token || !owner || !repo) { toast('Fill in all fields', '-'); return; }
   CONFIG = { token: token, owner: owner, repo: repo };
   const btn = document.getElementById('btn-connect');
   btn.disabled = true; btn.textContent = 'Connecting...';
@@ -638,7 +638,7 @@ document.getElementById('btn-connect').addEventListener('click', async function(
     await ghFetch('/contents/customers.json');
     saveConfig();
     showApp();
-  } catch (e) { toast('Connection failed: ' + e.message, 'â'); btn.disabled = false; btn.textContent = 'Connect'; }
+  } catch (e) { toast('Connection failed: ' + e.message, '-; btn.disabled = false; btn.textContent = 'Connect'; }
 });
 
 function showApp() {
