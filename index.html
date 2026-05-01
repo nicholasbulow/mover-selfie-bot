@@ -459,7 +459,7 @@ async function renderCustomers() {
         '<button class="btn btn-primary btn-sm" data-run-today="' + i + '">Today</button>' +
         '<button class="btn btn-outline light btn-sm" data-run-tomorrow="' + i + '">Tomorrow</button>' +
         '<button class="btn btn-ghost btn-sm" data-edit="' + i + '" style="padding:6px 10px">Edit</button>' +
-        '<button class="btn btn-danger btn-sm" data-del="' + i + '">â</button>' +
+        '<button class="btn btn-danger btn-sm" data-del="' + i + '">Remove</button>' +
       '</div>';
 
     row.querySelector('input[type=checkbox]').addEventListener('change', function(e) { customers[i].enabled = e.target.checked; persistCustomers(); });
