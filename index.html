@@ -402,7 +402,7 @@ function showRouteLinks(title, tripIds) {
       a.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#f8f9fa;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--navy);font-size:13px;font-weight:500;transition:background .12s';
       a.onmouseover = function() { this.style.background = '#edf2f7'; };
       a.onmouseout  = function() { this.style.background = '#f8f9fa'; };
-      a.innerHTML = '<span>Route #' + id + '</span><span style="color:var(--teal);font-size:12px">View selfie â</span>';
+      a.innerHTML = '<span>Route #' + id + '</span><span style="color:var(--teal);font-size:12px">View selfie -&gt;</span>';
       el.appendChild(a);
     });
   }
@@ -529,7 +529,7 @@ async function renderRuns() {
 
         '<span class="run-badge ' + status + '">' + label + '</span>' +
         '<div class="run-time">' + timeStr + '</div>' +
-        '<a href="' + run.html_url + '" target="_blank" style="color:var(--text-muted);font-size:13px;text-decoration:none;margin-left:4px">â</a>';
+        '<a href="' + run.html_url + '" target="_blank" style="color:var(--text-muted);font-size:13px;text-decoration:none;margin-left:4px">-&gt;</a>';
       if (histEntry && histEntry.trip_ids && histEntry.trip_ids.length) {
         const routeBtn = document.createElement('button');
         routeBtn.className = 'btn btn-outline light btn-sm';
