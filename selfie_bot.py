@@ -1,5 +1,5 @@
 """
-Mover Selfie Bot — GitHub Actions runner
+Mover Selfie Bot â GitHub Actions runner
 """
 
 import os
@@ -20,7 +20,7 @@ def log(msg: str):
 def format_date(d: date) -> str:
     return d.strftime("%d-%m-%Y")
 
-# ── Login ──────────────────────────────────────────────────────────────────────
+# ââ Login ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 def login(email: str, password: str) -> requests.Session:
     s = requests.Session()
@@ -68,15 +68,15 @@ def login(email: str, password: str) -> requests.Session:
     # Check success: if login failed, the password field will still be on the page
     post_soup = BeautifulSoup(resp.text, "html.parser")
     if post_soup.find("input", {"type": "password"}):
-        raise RuntimeError("Login failed — still on login page. Check MOVER_EMAIL and MOVER_PASSWORD secrets.")
+        raise RuntimeError("Login failed â still on login page. Check MOVER_EMAIL and MOVER_PASSWORD secrets.")
 
-    log(f"✅ Logged in as {email}")
+    log(f"â Logged in as {email}")
     return s
 
-# ── Get driver IDs ─────────────────────────────────────────────────────────────
+# ââ Get driver IDs âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 def get_driver_ids(session: requests.Session, customer_id: str, target_date: str) -> tuple:
-    # Parse target date for comparison — trips are sorted newest first,
+    # Parse target date for comparison â trips are sorted newest first,
     # so we stop paginating once we pass the target date
     from datetime import datetime
     target_dt = datetime.strptime(target_date, "%d-%m-%Y")
@@ -105,7 +105,7 @@ def get_driver_ids(session: requests.Session, customer_id: str, target_date: str
             except ValueError:
                 continue
 
-            # Trips are newest-first — if this row is older than target, stop paging
+            # Trips are newest-first â if this row is older than target, stop paging
             if row_dt < target_dt:
                 found_older = True
 
@@ -120,14 +120,14 @@ def get_driver_ids(session: requests.Session, customer_id: str, target_date: str
 
         # If we've seen rows older than our target, no need to go further back
         if found_older:
-            log(f"  Passed target date on page {page_num} — stopping pagination")
+            log(f"  Passed target date on page {page_num} â stopping pagination")
             break
 
-        # Find the "older trips" pagination link (Ældre ture >)
+        # Find the "older trips" pagination link (Ãldre ture >)
         next_link = None
         for a in soup.find_all("a", href=True):
             text = a.get_text(strip=True).lower()
-            if "ældre" in text or "older" in text or "next" in text:
+            if "Ã¦ldre" in text or "older" in text or "next" in text:
                 href = a["href"]
                 next_link = BASE + href if href.startswith("/") else href
                 break
@@ -151,11 +151,11 @@ def get_driver_ids(session: requests.Session, customer_id: str, target_date: str
                     driver_ids.add(m.group(1))
                     break
         except Exception as e:
-            log(f"  ⚠️  Route page error: {e}")
+            log(f"  â ï¸  Route page error: {e}")
 
     return list(driver_ids), len(see_more_links), see_more_links
 
-# ── Enable selfie ──────────────────────────────────────────────────────────────
+# ââ Enable selfie ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 def find_selfie_checkbox(soup: BeautifulSoup):
     heading = None
@@ -239,22 +239,42 @@ def enable_selfie(session: requests.Session, driver_id: str) -> str:
     vcb    = find_selfie_checkbox(vsoup)
     return "enabled" if (vcb and vcb.get("checked") is not None) else "save_failed"
 
-# ── Run customer ───────────────────────────────────────────────────────────────
+# ââ Run customer âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+
+def _find_selfie_stop(session, trip_id):
+    """Find which stop anchor (e.g. 'stop2') has the selfie requirement."""
+    url = f"{BASE}/dk/da/user-area/trips/session/{trip_id}"
+    try:
+        resp = session.get(url, timeout=15)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        import re as _re2
+        for h3 in soup.find_all("h3", id=_re2.compile(r"^stop\d+$")):
+            text = ""
+            for sib in h3.find_next_siblings():
+                if sib.name == "h3" and _re2.match(r"^stop\d+$", sib.get("id", "")):
+                    break
+                text += sib.get_text()
+            if "razzia" in text.lower() or "selfie" in text.lower():
+                return h3.get("id", "")
+    except Exception:
+        pass
+    return ""
+
 
 def run_customer(session: requests.Session, customer: dict, date_offset: int):
     target     = date.today() + timedelta(days=date_offset)
     target_str = format_date(target)
     label      = "today" if date_offset == 0 else "tomorrow"
 
-    log(f"\n── {customer['name']} ({customer['id']}) — {target_str} ({label})")
+    log(f"\nââ {customer['name']} ({customer['id']}) â {target_str} ({label})")
 
     driver_ids, trip_count, route_links = get_driver_ids(session, customer["id"], target_str)
 
     if not trip_count:
-        log(f"  ⚠️  No trips found for {target_str}")
+        log(f"  â ï¸  No trips found for {target_str}")
         return
     if not driver_ids:
-        log(f"  ⚠️  No driver IDs found ({trip_count} trips)")
+        log(f"  â ï¸  No driver IDs found ({trip_count} trips)")
         return
 
     log(f"  Found {len(driver_ids)} unique driver(s)")
@@ -262,21 +282,23 @@ def run_customer(session: requests.Session, customer: dict, date_offset: int):
     enabled = alreadyon = failed = 0
     for did in sorted(driver_ids):
         result = enable_selfie(session, did)
-        if   result == "enabled":    log(f"  ✅ Driver {did}: enabled");    enabled += 1
-        elif result == "already_on": log(f"  ⏭️  Driver {did}: already on"); alreadyon += 1
-        else:                        log(f"  ❌ Driver {did}: {result}");    failed += 1
+        if   result == "enabled":    log(f"  â Driver {did}: enabled");    enabled += 1
+        elif result == "already_on": log(f"  â­ï¸  Driver {did}: already on"); alreadyon += 1
+        else:                        log(f"  â Driver {did}: {result}");    failed += 1
 
-    log(f"  ── ✅ {enabled}  ⏭️  {alreadyon}  ❌ {failed}")
-    # Extract trip IDs from route URLs for the dashboard
+    log(f"  ââ â {enabled}  â­ï¸  {alreadyon}  â {failed}")
+    # Extract trip IDs and selfie stop anchors from route URLs
     trip_ids = []
     import re as _re
     for url in route_links:
         m = _re.search(r"/trips/session/(\d+)", url)
         if m:
-            trip_ids.append(m.group(1))
+            trip_id = m.group(1)
+            stop_anchor = _find_selfie_stop(session, trip_id)
+            trip_ids.append({"id": trip_id, "stop": stop_anchor})
     return {"id": customer["id"], "name": customer["name"], "enabled": enabled, "already_on": alreadyon, "failed": failed, "trip_ids": trip_ids}
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# ââ Main âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 def save_run_history(results):
     """Save run summary to run_history.json in the repo via git."""
@@ -318,9 +340,9 @@ def save_run_history(results):
         subprocess.run(["git", "add", history_path], check=True)
         subprocess.run(["git", "commit", "-m", "Update run history"], check=True)
         subprocess.run(["git", "push"], check=True)
-        log("✅ Run history saved")
+        log("â Run history saved")
     except Exception as e:
-        log(f"⚠️  Could not save run history: {e}")
+        log(f"â ï¸  Could not save run history: {e}")
 
 
 def main():
@@ -331,7 +353,7 @@ def main():
     email    = os.environ.get("MOVER_EMAIL")
     password = os.environ.get("MOVER_PASSWORD")
     if not email or not password:
-        log("❌ MOVER_EMAIL and MOVER_PASSWORD environment variables required")
+        log("â MOVER_EMAIL and MOVER_PASSWORD environment variables required")
         sys.exit(1)
 
     config_path = os.path.join(os.path.dirname(__file__), "customers.json")
@@ -362,7 +384,7 @@ def main():
             run_results["total_enabled"]    += result["enabled"]
             run_results["total_already_on"] += result["already_on"]
 
-    log("\n══ All done ══════════════════════")
+    log("\nââ All done ââââââââââââââââââââââ")
     save_run_history(run_results)
 
 if __name__ == "__main__":
