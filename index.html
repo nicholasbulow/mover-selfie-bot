@@ -343,6 +343,7 @@
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Click any link to view the selfie for that route.</p>
     <div id="modal-routes-list" style="max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
     <div class="modal-footer">
+      <button class="btn btn-primary" id="btn-routes-open-all">Open all routes</button>
       <button class="btn btn-outline light" id="btn-routes-close">Close</button>
     </div>
   </div>
@@ -606,6 +607,10 @@ function openEditModal(i) {
 document.getElementById('btn-add-customer').addEventListener('click', openAddModal);
 document.getElementById('btn-modal-cancel').addEventListener('click', function() { document.getElementById('modal-add').style.display = 'none'; });
 document.getElementById('btn-routes-close').addEventListener('click', function() { document.getElementById('modal-routes').style.display = 'none'; });
+document.getElementById('btn-routes-open-all').addEventListener('click', function() {
+  const links = document.querySelectorAll('#modal-routes-list a');
+  links.forEach(function(a) { window.open(a.href, '_blank'); });
+});
 document.getElementById('modal-routes').addEventListener('click', function(e) { if (e.target === document.getElementById('modal-routes')) document.getElementById('modal-routes').style.display = 'none'; });
 document.getElementById('modal-add').addEventListener('click', function(e) { if (e.target === document.getElementById('modal-add')) document.getElementById('modal-add').style.display = 'none'; });
 
