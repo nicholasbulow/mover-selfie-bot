@@ -76,69 +76,44 @@ def login(email: str, password: str) -> requests.Session:
 # Ã¢ÂÂÃ¢ÂÂ Get driver IDs Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
 def get_driver_ids(session: requests.Session, customer_id: str, target_date: str) -> tuple:
-    # Parse target date for comparison Ã¢ÂÂ trips are sorted newest first,
-    # so we stop paginating once we pass the target date
-    from datetime import datetime
-    target_dt = datetime.strptime(target_date, "%d-%m-%Y")
+    """Use the search trips endpoint for instant results - no pagination needed."""
+    # target_date is DD-MM-YYYY, search form needs MM-DD-YYYY
+    parts = target_date.split("-")  # [DD, MM, YYYY]
+    search_date = parts[1] + "-" + parts[0] + "-" + parts[2]  # MM-DD-YYYY
+
+    search_url = f"{BASE}/dk/da/user-area/trips/search-trips/"
+
+    # Get CSRF token
+    resp = session.get(search_url)
+    csrf = session.cookies.get("csrftoken", "")
+
+    # POST search form
+    payload = {
+        "trips":                "1",
+        "field0":               "",           # trip id
+        "field1":               "0",          # vehicle type
+        "field2":               customer_id,  # customer id
+        "field3":               "",           # status
+        "field4":               search_date,  # trip start from
+        "field5":               search_date,  # trip start to
+        "field6":               "",           # internal ref
+        "field7":               "",           # origin
+        "field8":               "0",          # sorting
+        "csrfmiddlewaretoken":  csrf,
+    }
+    resp = session.post(search_url, data=payload, headers={"Referer": search_url, "X-CSRFToken": csrf})
+    soup = BeautifulSoup(resp.text, "html.parser")
 
     see_more_links = []
-    page_url = f"{BASE}/dk/da/user-area/users/{customer_id}/trips/"
-    page_num = 1
-
-    while page_url:
-        log(f"  Fetching trips page {page_num}: {page_url}")
-        resp = session.get(page_url)
-        soup = BeautifulSoup(resp.text, "html.parser")
-        rows = soup.select("table tbody tr")
-        log(f"  Page {page_num} has {len(rows)} rows")
-
-        found_older = False
-        for row in rows:
-            cells = row.find_all("td")
-            if len(cells) < 2:
-                continue
-            date_text = cells[1].get_text(strip=True).split()[0]
-
-            # Parse this row's date
-            try:
-                row_dt = datetime.strptime(date_text, "%d-%m-%Y")
-            except ValueError:
-                continue
-
-            # Trips are newest-first Ã¢ÂÂ if this row is older than target, stop paging
-            if row_dt < target_dt:
-                found_older = True
-
-            if date_text == target_date:
-                for a in row.find_all("a", href=True):
-                    text = a.get_text(strip=True).lower()
-                    if "see" in text or "more" in text or "info" in text:
-                        href = a["href"]
-                        full = BASE + href if href.startswith("/") else href
-                        if full not in see_more_links:
-                            see_more_links.append(full)
-
-        # If we've seen rows older than our target, no need to go further back
-        if found_older:
-            log(f"  Passed target date on page {page_num} Ã¢ÂÂ stopping pagination")
-            break
-
-                # Find the next page link by URL pattern /trips/N/ (avoids encoding issues)
-        next_link = None
-        import re as _repag
-        for a in soup.find_all("a", href=True):
+    for row in soup.select("table tbody tr"):
+        for a in row.find_all("a", href=True):
             href = a["href"]
-            if _repag.search(r"/trips/\d+/?$", href):
-                next_link = BASE + href if href.startswith("/") else href
+            full = BASE + href if href.startswith("/") else href
+            if "/trips/session/" in full and full not in see_more_links:
+                see_more_links.append(full)
                 break
 
-        if next_link and next_link != page_url:
-            page_url = next_link
-            page_num += 1
-        else:
-            break  # No more pages
-
-    log(f"  Found {len(see_more_links)} trip(s) for {target_date} across {page_num} page(s)")
+    log(f"  Found {len(see_more_links)} trip(s) for {target_date} via search")
 
     driver_ids = set()
     for url in see_more_links:
@@ -151,9 +126,10 @@ def get_driver_ids(session: requests.Session, customer_id: str, target_date: str
                     driver_ids.add(m.group(1))
                     break
         except Exception as e:
-            log(f"  Ã¢ÂÂ Ã¯Â¸Â  Route page error: {e}")
+            log(f"  Route page error: {e}")
 
     return list(driver_ids), len(see_more_links), see_more_links
+
 
 # Ã¢ÂÂÃ¢ÂÂ Enable selfie Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 
