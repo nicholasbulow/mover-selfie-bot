@@ -550,6 +550,37 @@ async function renderRuns() {
   } catch (e) { el.innerHTML = '<div class="empty">Could not load runs: ' + e.message + '</div>'; }
 }
 
+
+// -- Run completion polling --
+let _pollInterval = null;
+
+function startPolling(label) {
+  if (_pollInterval) clearInterval(_pollInterval);
+  let attempts = 0;
+  const maxAttempts = 40;
+  _pollInterval = setInterval(async function() {
+    attempts++;
+    if (attempts > maxAttempts) { clearInterval(_pollInterval); _pollInterval = null; return; }
+    try {
+      const data = await ghFetch('/actions/runs?per_page=5&event=workflow_dispatch');
+      const latest = (data.workflow_runs || []).find(function(r) { return r.name === 'Mover Selfie Bot'; });
+      if (!latest) return;
+      if (latest.status === 'completed') {
+        clearInterval(_pollInterval); _pollInterval = null;
+        const success = latest.conclusion === 'success';
+        const banner = document.getElementById('run-complete-banner');
+        document.getElementById('banner-title').textContent = success ? 'Selfies activated' : 'Run failed';
+        document.getElementById('banner-title').style.color = success ? 'var(--teal)' : 'var(--red)';
+        document.getElementById('banner-body').textContent = success
+          ? label + ' - selfies are now enabled for all drivers.'
+          : 'Check GitHub Actions for details.';
+        banner.style.display = 'block';
+        renderRuns(); renderCustomers();
+      }
+    } catch(e) { /* silent */ }
+  }, 30000);
+}
+
 async function runCustomer(customer, offset) {
   const label = offset === 0 ? 'Today' : 'Tomorrow';
   const logEl = document.getElementById('log-box');
@@ -564,7 +595,7 @@ async function runCustomer(customer, offset) {
     toast('Run triggered for ' + customer.name);
     setTimeout(renderRuns, 4000);
     setTimeout(renderCustomers, 8000);
-    startPolling(customer.name + ' — ' + label);
+    startPolling(customer.name + ' - ' + label);
     setTimeout(loadTotalSelfies, 15000);
   } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, 'ÃÂ¢ÃÂÃÂ'); }
 }
@@ -583,7 +614,7 @@ async function runAll(offset) {
     toast('Run triggered for all customers');
     setTimeout(renderRuns, 4000);
     setTimeout(renderCustomers, 8000);
-    startPolling('All customers — ' + label);
+    startPolling('All customers - ' + label);
   } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, 'ÃÂ¢ÃÂÃÂ'); }
 }
 
