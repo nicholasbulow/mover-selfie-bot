@@ -524,6 +524,8 @@ async function renderRuns() {
       let custLabel;
       if (histEntry && histEntry.customers && histEntry.customers.length > 0) {
         custLabel = histEntry.customers.map(function(c) { return c.name; }).join(', ');
+      } else if (status === 'in_progress' || status === 'queued') {
+        custLabel = 'Running...';
       } else {
         custLabel = 'All customers';
       }
