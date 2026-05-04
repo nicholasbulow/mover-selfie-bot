@@ -516,7 +516,11 @@ async function renderRuns() {
 
       const offset    = run.inputs && run.inputs.offset === '1' ? 'Tomorrow' : 'Today';
       // Declare histEntry here so it's available for const offset = run.inputs && run.inputs.offset === '1' ? 'Tomorrow' : 'Today';
-      const histEntry = history[idx] || null;
+      // Match by timestamp within 30 min window (history and runs both UTC)
+      const runTime = new Date(run.created_at).getTime();
+      const histEntry = history.find(function(h) {
+        return Math.abs(new Date(h.timestamp).getTime() - runTime) < 30 * 60 * 1000;
+      }) || null;
       let custLabel;
       if (histEntry && histEntry.customers && histEntry.customers.length > 0) {
         custLabel = histEntry.customers.map(function(c) { return c.name; }).join(', ');
