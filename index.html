@@ -276,15 +276,15 @@
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-label">Active Customers</div>
-        <div class="stat-value teal" id="stat-customers">ÃÂ¢ÃÂÃÂ</div>
+        <div class="stat-value teal" id="stat-customers"> - </div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Last Run</div>
-        <div class="stat-value" id="stat-last-run" style="font-size:16px;padding-top:5px">ÃÂ¢ÃÂÃÂ</div>
+        <div class="stat-value" id="stat-last-run" style="font-size:16px;padding-top:5px"> - </div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Total Selfies Activated</div>
-        <div class="stat-value teal" id="stat-total-selfies">ÃÂ¢ÃÂÃÂ</div>
+        <div class="stat-value teal" id="stat-total-selfies"> - </div>
       </div>
     </div>
 
@@ -425,7 +425,7 @@ async function loadTotalSelfies() {
     const total = history.reduce(function(sum, r) { return sum + (r.total_enabled || 0); }, 0);
     document.getElementById('stat-total-selfies').textContent = total.toLocaleString();
   } catch (e) {
-    document.getElementById('stat-total-selfies').textContent = 'ÃÂ¢ÃÂÃÂ';
+    document.getElementById('stat-total-selfies').textContent = ' - ';
   }
 }
 
@@ -540,7 +540,7 @@ async function renderRuns() {
         routeBtn.style.marginLeft = '6px';
         routeBtn.textContent = histEntry.trip_ids.length + ' routes';
         routeBtn.addEventListener('click', function() {
-          const label = custLabel + ' ÃÂ¢ÃÂÃÂ ' + offset + ' (' + timeStr + ')';
+          const label = custLabel + '  -  ' + offset + ' (' + timeStr + ')';
           showRouteLinks(label, histEntry.trip_ids);
         });
         item.appendChild(routeBtn);
@@ -585,7 +585,7 @@ async function runCustomer(customer, offset) {
   const label = offset === 0 ? 'Today' : 'Tomorrow';
   const logEl = document.getElementById('log-box');
   logEl.style.display = 'block';
-  logEl.textContent   = 'Triggering ' + customer.name + ' ÃÂ¢ÃÂÃÂ ' + label + '...';
+  logEl.textContent   = 'Triggering ' + customer.name + '  -  ' + label + '...';
   try {
     await ghFetch('/actions/workflows/selfie_bot.yml/dispatches', {
       method: 'POST',
@@ -604,7 +604,7 @@ async function runAll(offset) {
   const label = offset === 0 ? 'Today' : 'Tomorrow';
   const logEl = document.getElementById('log-box');
   logEl.style.display = 'block';
-  logEl.textContent   = 'Triggering all customers ÃÂ¢ÃÂÃÂ ' + label + '...';
+  logEl.textContent   = 'Triggering all customers  -  ' + label + '...';
   try {
     await ghFetch('/actions/workflows/selfie_bot.yml/dispatches', {
       method: 'POST',
