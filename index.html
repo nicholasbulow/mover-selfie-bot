@@ -253,10 +253,10 @@
 
 <div id="auth-screen" style="display:none">
   <div class="auth-screen">
-    <div class="auth-icon">Ã°ÂÂÂ</div>
+    <div class="auth-icon">ÃÂ°ÃÂÃÂÃÂ</div>
     <h2>Connect to GitHub</h2>
     <p>This dashboard reads and updates your selfie bot config directly from your GitHub repo. You need a Personal Access Token with repo access.</p>
-    <a class="help-link" href="https://github.com/settings/tokens/new?scopes=repo&description=SelfieBot" target="_blank">Ã¢ÂÂ Create a token on GitHub (takes 30 seconds)</a>
+    <a class="help-link" href="https://github.com/settings/tokens/new?scopes=repo&description=SelfieBot" target="_blank">ÃÂ¢ÃÂÃÂ Create a token on GitHub (takes 30 seconds)</a>
     <div class="auth-form">
       <label>GitHub Personal Access Token</label>
       <input type="password" id="inp-token" placeholder="ghp_xxxxxxxxxxxx">
@@ -276,15 +276,15 @@
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-label">Active Customers</div>
-        <div class="stat-value teal" id="stat-customers">Ã¢ÂÂ</div>
+        <div class="stat-value teal" id="stat-customers">ÃÂ¢ÃÂÃÂ</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Last Run</div>
-        <div class="stat-value" id="stat-last-run" style="font-size:16px;padding-top:5px">Ã¢ÂÂ</div>
+        <div class="stat-value" id="stat-last-run" style="font-size:16px;padding-top:5px">ÃÂ¢ÃÂÃÂ</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Total Selfies Activated</div>
-        <div class="stat-value teal" id="stat-total-selfies">Ã¢ÂÂ</div>
+        <div class="stat-value teal" id="stat-total-selfies">ÃÂ¢ÃÂÃÂ</div>
       </div>
     </div>
 
@@ -304,14 +304,14 @@
       <button class="btn btn-outline light btn-sm" id="btn-add-customer">+ Add customer</button>
     </div>
     <div class="customer-list" id="customer-list">
-      <div class="empty"><div class="empty-icon">Ã°ÂÂÂ¢</div>No customers configured yet.</div>
+      <div class="empty"><div class="empty-icon">ÃÂ°ÃÂÃÂÃÂ¢</div>No customers configured yet.</div>
     </div>
 
     <div class="section-header" style="margin-top:32px">
       <div class="section-title">Recent runs</div>
     </div>
     <div class="runs-list" id="runs-list">
-      <div class="empty"><div class="empty-icon">Ã¢ÂÂ±</div>No runs yet.</div>
+      <div class="empty"><div class="empty-icon">ÃÂ¢ÃÂÃÂ±</div>No runs yet.</div>
     </div>
 
   </div>
@@ -351,6 +351,15 @@
 
 <div class="toast" id="toast"></div>
 
+<div id="run-complete-banner" style="display:none;position:fixed;top:70px;right:24px;background:#fff;border:1.5px solid var(--teal);border-radius:10px;padding:16px 20px;box-shadow:0 4px 20px rgba(0,0,0,0.12);z-index:300;max-width:320px;font-size:13px;">
+  <div style="font-weight:700;color:var(--navy);margin-bottom:4px" id="banner-title">Run complete</div>
+  <div style="color:var(--text-muted)" id="banner-body">Selfies have been activated.</div>
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <button class="btn btn-primary btn-sm" onclick="renderRuns();renderCustomers();document.getElementById('run-complete-banner').style.display='none'">Refresh</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('run-complete-banner').style.display='none'">Dismiss</button>
+  </div>
+</div>
+
 <script>
 let CONFIG = { token: '', owner: '', repo: '' };
 let customers = [];
@@ -360,7 +369,7 @@ function saveConfig() { localStorage.setItem('selfiebot_config', JSON.stringify(
 function loadConfig() { const s = localStorage.getItem('selfiebot_config'); if (s) CONFIG = JSON.parse(s); }
 
 function toast(msg, icon) {
-  icon = icon || 'Ã¢ÂÂ';
+  icon = icon || 'ÃÂ¢ÃÂÃÂ';
   const el = document.getElementById('toast');
   el.innerHTML = icon + '&nbsp;&nbsp;' + msg;
   el.classList.add('show');
@@ -416,7 +425,7 @@ async function loadTotalSelfies() {
     const total = history.reduce(function(sum, r) { return sum + (r.total_enabled || 0); }, 0);
     document.getElementById('stat-total-selfies').textContent = total.toLocaleString();
   } catch (e) {
-    document.getElementById('stat-total-selfies').textContent = 'Ã¢ÂÂ';
+    document.getElementById('stat-total-selfies').textContent = 'ÃÂ¢ÃÂÃÂ';
   }
 }
 
@@ -429,7 +438,7 @@ async function persistCustomers() {
     });
     toast('Saved');
     renderCustomers();
-  } catch (e) { toast('Save failed: ' + e.message, 'Ã¢ÂÂ'); }
+  } catch (e) { toast('Save failed: ' + e.message, 'ÃÂ¢ÃÂÃÂ'); }
 }
 
 
@@ -439,7 +448,7 @@ async function renderCustomers() {
   document.getElementById('stat-customers').textContent = customers.filter(c => c.enabled !== false).length;
 
   if (!customers.length) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">Ã°ÂÂÂ¢</div>No customers yet. Click "+ Add customer" to get started.</div>';
+    el.innerHTML = '<div class="empty"><div class="empty-icon">ÃÂ°ÃÂÃÂÃÂ¢</div>No customers yet. Click "+ Add customer" to get started.</div>';
     return;
   }
 
@@ -483,7 +492,7 @@ async function renderRuns() {
     const botRuns = (actionsData.workflow_runs || []).filter(r => r.name === 'Mover Selfie Bot');
 
     if (!botRuns.length) {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">Ã¢ÂÂ±</div>No runs yet.</div>';
+      el.innerHTML = '<div class="empty"><div class="empty-icon">ÃÂ¢ÃÂÃÂ±</div>No runs yet.</div>';
       return;
     }
 
@@ -531,7 +540,7 @@ async function renderRuns() {
         routeBtn.style.marginLeft = '6px';
         routeBtn.textContent = histEntry.trip_ids.length + ' routes';
         routeBtn.addEventListener('click', function() {
-          const label = custLabel + ' Ã¢ÂÂ ' + offset + ' (' + timeStr + ')';
+          const label = custLabel + ' ÃÂ¢ÃÂÃÂ ' + offset + ' (' + timeStr + ')';
           showRouteLinks(label, histEntry.trip_ids);
         });
         item.appendChild(routeBtn);
@@ -545,7 +554,7 @@ async function runCustomer(customer, offset) {
   const label = offset === 0 ? 'Today' : 'Tomorrow';
   const logEl = document.getElementById('log-box');
   logEl.style.display = 'block';
-  logEl.textContent   = 'Triggering ' + customer.name + ' Ã¢ÂÂ ' + label + '...';
+  logEl.textContent   = 'Triggering ' + customer.name + ' ÃÂ¢ÃÂÃÂ ' + label + '...';
   try {
     await ghFetch('/actions/workflows/selfie_bot.yml/dispatches', {
       method: 'POST',
@@ -555,15 +564,16 @@ async function runCustomer(customer, offset) {
     toast('Run triggered for ' + customer.name);
     setTimeout(renderRuns, 4000);
     setTimeout(renderCustomers, 8000);
+    startPolling(customer.name + ' — ' + label);
     setTimeout(loadTotalSelfies, 15000);
-  } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, 'Ã¢ÂÂ'); }
+  } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, 'ÃÂ¢ÃÂÃÂ'); }
 }
 
 async function runAll(offset) {
   const label = offset === 0 ? 'Today' : 'Tomorrow';
   const logEl = document.getElementById('log-box');
   logEl.style.display = 'block';
-  logEl.textContent   = 'Triggering all customers Ã¢ÂÂ ' + label + '...';
+  logEl.textContent   = 'Triggering all customers ÃÂ¢ÃÂÃÂ ' + label + '...';
   try {
     await ghFetch('/actions/workflows/selfie_bot.yml/dispatches', {
       method: 'POST',
@@ -573,7 +583,8 @@ async function runAll(offset) {
     toast('Run triggered for all customers');
     setTimeout(renderRuns, 4000);
     setTimeout(renderCustomers, 8000);
-  } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, 'Ã¢ÂÂ'); }
+    startPolling('All customers — ' + label);
+  } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, 'ÃÂ¢ÃÂÃÂ'); }
 }
 
 document.getElementById('btn-run-today').addEventListener('click', function() { runAll(0); });
@@ -611,10 +622,10 @@ document.getElementById('modal-add').addEventListener('click', function(e) { if 
 document.getElementById('btn-modal-save').addEventListener('click', async function() {
   const id   = document.getElementById('m-id').value.trim();
   const name = document.getElementById('m-name').value.trim() || id;
-  if (!id) { toast('Customer ID is required', 'Ã¢ÂÂ '); return; }
+  if (!id) { toast('Customer ID is required', 'ÃÂ¢ÃÂÃÂ '); return; }
   const customer = { id: id, name: name, enabled: editIndex >= 0 ? (customers[editIndex].enabled !== false) : true };
   if (editIndex >= 0) { customers[editIndex] = customer; }
-  else { if (customers.find(function(c) { return c.id === id; })) { toast('Customer ID already exists', 'Ã¢ÂÂ '); return; } customers.push(customer); }
+  else { if (customers.find(function(c) { return c.id === id; })) { toast('Customer ID already exists', 'ÃÂ¢ÃÂÃÂ '); return; } customers.push(customer); }
   document.getElementById('modal-add').style.display = 'none';
   await persistCustomers();
   toast(editIndex >= 0 ? 'Customer updated' : 'Customer added');
@@ -624,7 +635,7 @@ document.getElementById('btn-connect').addEventListener('click', async function(
   const token = document.getElementById('inp-token').value.trim();
   const owner = document.getElementById('inp-owner').value.trim();
   const repo  = document.getElementById('inp-repo').value.trim();
-  if (!token || !owner || !repo) { toast('Fill in all fields', 'Ã¢ÂÂ '); return; }
+  if (!token || !owner || !repo) { toast('Fill in all fields', 'ÃÂ¢ÃÂÃÂ '); return; }
   CONFIG = { token: token, owner: owner, repo: repo };
   const btn = document.getElementById('btn-connect');
   btn.disabled = true; btn.textContent = 'Connecting...';
@@ -632,7 +643,7 @@ document.getElementById('btn-connect').addEventListener('click', async function(
     await ghFetch('/contents/customers.json');
     saveConfig();
     showApp();
-  } catch (e) { toast('Connection failed: ' + e.message, 'Ã¢ÂÂ'); btn.disabled = false; btn.textContent = 'Connect'; }
+  } catch (e) { toast('Connection failed: ' + e.message, 'ÃÂ¢ÃÂÃÂ'); btn.disabled = false; btn.textContent = 'Connect'; }
 });
 
 function showApp() {
