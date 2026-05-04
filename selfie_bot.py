@@ -362,6 +362,9 @@ def main():
             run_results["customers"].append(result)
             run_results["total_enabled"]    += result["enabled"]
             run_results["total_already_on"] += result["already_on"]
+        else:
+            # Still record the customer even if no trips found
+            run_results["customers"].append({"id": customer["id"], "name": customer["name"], "enabled": 0, "already_on": 0, "failed": 0, "trip_ids": []})
 
     log("\nÃ¢ÂÂÃ¢ÂÂ All done Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ")
     save_run_history(run_results)
