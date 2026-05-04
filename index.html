@@ -558,31 +558,6 @@ async function renderRuns() {
 
 
 
-// Add a placeholder run row immediately after triggering
-function addPendingRun(label) {
-  const el = document.getElementById('runs-list');
-  const existing = el.querySelector('.empty');
-  if (existing) el.innerHTML = '';
-  const item = document.createElement('div');
-  item.className = 'run-item';
-  item.id = 'pending-run-row';
-  const now = new Date();
-  const timeStr = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ' ' +
-                  now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  item.innerHTML =
-    '<div class="run-dot queued"></div>' +
-    '<div class="run-label">' + label + '</div>' +
-    '<span class="run-badge queued">Queued</span>' +
-    '<div class="run-time">' + timeStr + '</div>' +
-    '<span style="min-width:30px"></span>';
-  el.insertBefore(item, el.firstChild);
-  // Replace with real data after 8 seconds
-  setTimeout(function() {
-    const pending = document.getElementById('pending-run-row');
-    if (pending) pending.remove();
-    renderRuns();
-  }, 8000);
-}
 
 // -- Run completion polling --
 let _pollInterval = null;
@@ -627,8 +602,9 @@ async function runCustomer(customer, offset) {
     });
     logEl.textContent += ' Triggered!';
     toast('Run triggered for ' + customer.name);
-    addPendingRun(customer.name + ' - ' + label);
     startPolling(customer.name + ' - ' + label);
+    setTimeout(renderRuns, 3000);
+    setTimeout(renderRuns, 8000);
     setTimeout(loadTotalSelfies, 15000);
   } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, 'ÃÂ¢ÃÂÃÂ'); }
 }
@@ -645,8 +621,9 @@ async function runAll(offset) {
     });
     logEl.textContent += ' Triggered!';
     toast('Run triggered for all customers');
-    addPendingRun('All customers - ' + label);
     startPolling('All customers - ' + label);
+    setTimeout(renderRuns, 3000);
+    setTimeout(renderRuns, 8000);
   } catch (e) { logEl.textContent += ' Error: ' + e.message; toast('Failed: ' + e.message, 'ÃÂ¢ÃÂÃÂ'); }
 }
 
