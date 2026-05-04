@@ -507,6 +507,7 @@ async function renderRuns() {
     el.innerHTML = '';
     botRuns.slice(0, 8).forEach(function(run, idx) {
       const rawStatus = run.status === 'completed' ? run.conclusion : run.status;
+      if (rawStatus === 'cancelled') return; // hide cancelled runs
       const status    = { success: 'success', failure: 'failure', in_progress: 'in_progress', queued: 'queued' }[rawStatus] || 'queued';
       const label     = { success: 'Done', failure: 'Failed', in_progress: 'Running...', queued: 'Queued' }[status];
 
@@ -632,7 +633,14 @@ async function runAll(offset) {
 
 document.getElementById('btn-run-today').addEventListener('click', function() { runAll(0); });
 document.getElementById('btn-run-tomorrow').addEventListener('click', function() { runAll(1); });
-document.getElementById('btn-refresh-runs').addEventListener('click', function() { renderRuns(); renderCustomers(); });
+document.getElementById('btn-refresh-runs').addEventListener('click', function() {
+  const btn = document.getElementById('btn-refresh-runs');
+  btn.textContent = 'Refreshing...';
+  btn.disabled = true;
+  Promise.all([renderRuns(), renderCustomers(), loadTotalSelfies()]).finally(function() {
+    setTimeout(function() { btn.textContent = 'Refresh'; btn.disabled = false; }, 800);
+  });
+});
 
 function openAddModal() {
   editIndex = -1;
@@ -698,6 +706,7 @@ function showApp() {
   loadCustomers().then(function() { renderCustomers(); });
   renderRuns();
   loadTotalSelfies();
+  setInterval(function() { renderRuns(); }, 30000);
 }
 
 document.getElementById('btn-logout').addEventListener('click', function() { localStorage.removeItem('selfiebot_config'); location.reload(); });
