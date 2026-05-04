@@ -516,11 +516,14 @@ async function renderRuns() {
 
       const offset    = run.inputs && run.inputs.offset === '1' ? 'Tomorrow' : 'Today';
       // Declare histEntry here so it's available for const offset = run.inputs && run.inputs.offset === '1' ? 'Tomorrow' : 'Today';
-      // Match by timestamp within 30 min window (history and runs both UTC)
+      // Match to closest history entry within 2 hours
       const runTime = new Date(run.created_at).getTime();
-      const histEntry = history.find(function(h) {
-        return Math.abs(new Date(h.timestamp).getTime() - runTime) < 30 * 60 * 1000;
-      }) || null;
+      const histEntry = history.reduce(function(best, h) {
+        const diff = Math.abs(new Date(h.timestamp).getTime() - runTime);
+        if (diff > 2 * 60 * 60 * 1000) return best; // outside 2 hour window
+        if (!best) return h;
+        return diff < Math.abs(new Date(best.timestamp).getTime() - runTime) ? h : best;
+      }, null);
       let custLabel;
       if (histEntry && histEntry.customers && histEntry.customers.length > 0) {
         custLabel = histEntry.customers.map(function(c) { return c.name; }).join(', ');
