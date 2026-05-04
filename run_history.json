@@ -1,5 +1,13 @@
 [
   {
+    "timestamp": "2026-05-04T08:21:03Z",
+    "offset": 0,
+    "customers": [],
+    "total_enabled": 0,
+    "total_already_on": 0,
+    "trip_ids": []
+  },
+  {
     "timestamp": "2026-05-04T08:02:33Z",
     "offset": 0,
     "customers": [
