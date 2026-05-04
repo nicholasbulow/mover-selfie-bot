@@ -123,12 +123,12 @@ def get_driver_ids(session: requests.Session, customer_id: str, target_date: str
             log(f"  Passed target date on page {page_num} Ã¢ÂÂ stopping pagination")
             break
 
-        # Find the "older trips" pagination link (ÃÂldre ture >)
+                # Find the next page link by URL pattern /trips/N/ (avoids encoding issues)
         next_link = None
+        import re as _repag
         for a in soup.find_all("a", href=True):
-            text = a.get_text(strip=True).lower()
-            if "ÃÂ¦ldre" in text or "older" in text or "next" in text:
-                href = a["href"]
+            href = a["href"]
+            if _repag.search(r"/trips/\d+/?$", href):
                 next_link = BASE + href if href.startswith("/") else href
                 break
 
