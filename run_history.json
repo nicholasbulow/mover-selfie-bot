@@ -1,5 +1,34 @@
 [
   {
+    "timestamp": "2026-05-08T07:03:28Z",
+    "offset": 0,
+    "customers": [
+      {
+        "id": "2271913",
+        "name": "IKEA NO Co-pilot",
+        "enabled": 5,
+        "already_on": 0,
+        "failed": 0,
+        "trip_ids": [
+          "2501283",
+          "2501431",
+          "2501660",
+          "2499546",
+          "2501428"
+        ]
+      }
+    ],
+    "total_enabled": 5,
+    "total_already_on": 0,
+    "trip_ids": [
+      "2501283",
+      "2501431",
+      "2501660",
+      "2499546",
+      "2501428"
+    ]
+  },
+  {
     "timestamp": "2026-05-07T06:45:39Z",
     "offset": 0,
     "customers": [
